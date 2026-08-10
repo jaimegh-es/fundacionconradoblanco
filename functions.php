@@ -808,43 +808,45 @@ function fcb_serve_files() {
 add_action( 'template_redirect', 'fcb_serve_files' );
 
 /**
- * Best-effort: redirige (301) wp-content/uploads → /files/ añadiendo una regla
- * en el .htaccess raíz si es escribible. Los archivos estáticos no pasan por
- * WordPress, por lo que esta regla a nivel de servidor es la que garantiza el
- * redirect de las URLs antiguas.
+ * Redirige (301) las URLs antiguas de wp-content/uploads → /files/ a nivel de
+ * WordPress. El hosting regenera el .htaccess, por lo que la regla de servidor
+ * no es fiable; el redirect en PHP cubre las peticiones que llegan a WP.
  */
-function fcb_ensure_files_htaccess() {
-	if ( get_transient( 'fcb_files_htaccess_done' ) ) {
+function fcb_redirect_uploads_to_files() {
+	if ( ! empty( $GLOBALS['fcb_file'] ) ) {
 		return;
 	}
-	set_transient( 'fcb_files_htaccess_done', 1, DAY_IN_SECONDS );
 
+	$uri = isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '';
+	$uri = preg_replace( '/\?.*$/', '', (string) $uri );
+
+	if ( preg_match( '#^/wp-content/uploads/(.+)$#', $uri, $m ) ) {
+		wp_safe_redirect( home_url( '/files/' . $m[1] ), 301 );
+		exit;
+	}
+}
+add_action( 'template_redirect', 'fcb_redirect_uploads_to_files' );
+
+/**
+ * Limpia el bloque "FCB files" que versiones anteriores escribieron en el
+ * .htaccess raíz: el redirect de servidor ya no se usa.
+ */
+function fcb_cleanup_files_htaccess() {
 	$htaccess_file = trailingslashit( ABSPATH ) . '.htaccess';
 	if ( ! file_exists( $htaccess_file ) || ! is_writable( $htaccess_file ) ) {
 		return;
 	}
 
 	$contents = (string) file_get_contents( $htaccess_file );
-	if ( false !== strpos( $contents, '# BEGIN FCB files' ) ) {
+	if ( false === strpos( $contents, '# BEGIN FCB files' ) ) {
 		return;
 	}
 
-	$block = "# BEGIN FCB files\n" .
-		"<IfModule mod_rewrite.c>\n" .
-		"RewriteRule ^wp-content/uploads/(.*)$ /files/\$1 [R=301,L,NC]\n" .
-		"</IfModule>\n" .
-		"# END FCB files\n\n";
-
-	$pos = strpos( $contents, '# BEGIN WordPress' );
-	if ( false !== $pos ) {
-		$contents = substr( $contents, 0, $pos ) . $block . substr( $contents, $pos );
-	} else {
-		$contents = $block . $contents;
-	}
-
+	$pattern = '/# BEGIN FCB files\s*.*?# END FCB files\s*\n?/s';
+	$contents = preg_replace( $pattern, '', $contents );
 	file_put_contents( $htaccess_file, $contents ); // phpcs:ignore
 }
-add_action( 'after_switch_theme', 'fcb_ensure_files_htaccess' );
+add_action( 'after_switch_theme', 'fcb_cleanup_files_htaccess' );
 
 function fcb_pdf_viewer_template_redirect() {
 	if ( get_query_var( 'fcb_pdf_viewer' ) ) {
@@ -1024,8 +1026,7 @@ function fcb_execute_silent_update() {
 	}
 
 	flush_rewrite_rules();
-	delete_transient( 'fcb_files_htaccess_done' );
-	fcb_ensure_files_htaccess();
+	fcb_cleanup_files_htaccess();
 
 	return true;
 }
@@ -1063,7 +1064,6 @@ function fcb_add_admin_management_page() {
 add_action( 'admin_menu', 'fcb_add_admin_management_page' );
 
 function fcb_render_admin_management_page() {
-	fcb_ensure_files_htaccess();
 	?>
 	<div class="wrap">
 		<h1><?php esc_html_e( 'Gestión de Biblioteca y Publicaciones', 'fcb' ); ?></h1>
