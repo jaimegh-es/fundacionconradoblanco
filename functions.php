@@ -1030,4 +1030,61 @@ function fcb_run_weekly_github_update() {
 }
 add_action( 'fcb_weekly_github_update', 'fcb_run_weekly_github_update' );
 
+/**
+ * Registrar una página de administración para la gestión de libros/publicaciones.
+ */
+function fcb_add_admin_management_page() {
+	add_menu_page(
+		__( 'Gestión de Biblioteca', 'fcb' ),
+		__( 'Gestión Biblioteca', 'fcb' ),
+		'manage_options',
+		'fcb-gestion-biblioteca',
+		'fcb_render_admin_management_page',
+		'dashicons-book-alt',
+		6
+	);
+}
+add_action( 'admin_menu', 'fcb_add_admin_management_page' );
+
+function fcb_render_admin_management_page() {
+	?>
+	<div class="wrap">
+		<h1><?php esc_html_e( 'Gestión de Biblioteca y Publicaciones', 'fcb' ); ?></h1>
+		<p class="description">
+			<?php esc_html_e( 'Desde este panel centralizado puedes administrar de forma real los libros, revistas y publicaciones de la Fundación Conrado Blanco.', 'fcb' ); ?>
+		</p>
+
+		<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; margin-top: 20px;">
+			<!-- Caja 1: Administrar Libros -->
+			<div class="card" style="max-width: 100%; margin: 0; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+				<h2 style="margin-top: 0;"><span class="dashicons dashicons-admin-post" style="vertical-align: middle; margin-right: 5px;"></span> <?php esc_html_e( 'Libros y Publicaciones', 'fcb' ); ?></h2>
+				<p><?php esc_html_e( 'Crea, edita o elimina los libros que aparecen tanto en la biblioteca principal como en la portada del sitio web.', 'fcb' ); ?></p>
+				<p style="margin-top: 20px;">
+					<a href="<?php echo esc_url( admin_url( 'edit.php?post_type=libro' ) ); ?>" class="button button-primary"><?php esc_html_e( 'Ver todos los Libros', 'fcb' ); ?></a>
+					<a href="<?php echo esc_url( admin_url( 'post-new.php?post_type=libro' ) ); ?>" class="button button-secondary"><?php esc_html_e( 'Añadir nuevo Libro', 'fcb' ); ?></a>
+				</p>
+			</div>
+
+			<!-- Caja 2: Colecciones y Categorías -->
+			<div class="card" style="max-width: 100%; margin: 0; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+				<h2 style="margin-top: 0;"><span class="dashicons dashicons-category" style="vertical-align: middle; margin-right: 5px;"></span> <?php esc_html_e( 'Colecciones y Categorías', 'fcb' ); ?></h2>
+				<p><?php esc_html_e( 'Administra las colecciones (ej. Capiteles, Antologías, Revistas Charin) para organizar y filtrar las publicaciones en la web.', 'fcb' ); ?></p>
+				<p style="margin-top: 20px;">
+					<a href="<?php echo esc_url( admin_url( 'edit-tags.php?taxonomy=categoria-libro&post_type=libro' ) ); ?>" class="button button-primary"><?php esc_html_e( 'Gestionar Colecciones', 'fcb' ); ?></a>
+				</p>
+			</div>
+
+			<!-- Caja 3: Actualizaciones del Tema -->
+			<div class="card" style="max-width: 100%; margin: 0; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+				<h2 style="margin-top: 0;"><span class="dashicons dashicons-update" style="vertical-align: middle; margin-right: 5px;"></span> <?php esc_html_e( 'Actualizaciones de GitHub', 'fcb' ); ?></h2>
+				<p><?php esc_html_e( 'Comprueba y descarga la última versión del tema de la Fundación directamente desde el repositorio Git público.', 'fcb' ); ?></p>
+				<p style="margin-top: 20px;">
+					<a href="<?php echo esc_url( admin_url( 'customize.php?autofocus[section]=fcb_github_update_section' ) ); ?>" class="button button-primary"><?php esc_html_e( 'Ir a Actualizaciones', 'fcb' ); ?></a>
+				</p>
+			</div>
+		</div>
+	</div>
+	<?php
+}
+
 
