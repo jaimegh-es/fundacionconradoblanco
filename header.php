@@ -16,6 +16,8 @@
 <body <?php body_class(); ?>>
 <?php wp_body_open(); ?>
 
+<div class="fcb-transition-overlay" aria-hidden="true"></div>
+
 <a class="skip-link screen-reader-text" href="#content"><?php esc_html_e( 'Saltar al contenido', 'fcb' ); ?></a>
 
 <header class="site-header" role="banner">

@@ -32,7 +32,7 @@
 		</div>
 
 		<p class="site-footer__copy">
-			&copy; <?php echo esc_html( gmdate( 'Y' ) ); ?> <?php bloginfo( 'name' ); ?> | Tema diseñado por <a href="https://inled.es" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Inled Group</a>
+			&copy; <?php echo esc_html( gmdate( 'Y' ) ); ?> <?php bloginfo( 'name' ); ?> | ¿Te gusta la web? La hemos hecho los de <a href="https://inled.es" target="_blank" rel="noopener noreferrer" style="color: inherit; text-decoration: underline;">Inled Group</a>
 		</p>
 	</div>
 </footer>

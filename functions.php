@@ -48,11 +48,21 @@ add_action( 'after_setup_theme', 'fcb_setup' );
  * Estilos y scripts.
  */
 function fcb_assets() {
-	wp_enqueue_style( 'fcb-style', get_stylesheet_uri(), array(), filemtime( get_stylesheet_directory() . '/style.css' ) );
+	wp_enqueue_style( 'fcb-fonts', 'https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600;700;800&display=swap', array(), null );
+	wp_enqueue_style( 'fcb-style', get_stylesheet_uri(), array( 'fcb-fonts' ), filemtime( get_stylesheet_directory() . '/style.css' ) );
 	wp_enqueue_script( 'lucide-icons', 'https://unpkg.com/lucide@latest', array(), null, true );
 	wp_enqueue_script( 'fcb-nav', get_template_directory_uri() . '/assets/js/nav.js', array( 'lucide-icons' ), filemtime( get_stylesheet_directory() . '/assets/js/nav.js' ), true );
 }
 add_action( 'wp_enqueue_scripts', 'fcb_assets' );
+
+/**
+ * Marca HTML con clase .js antes del primer paint para que el CSS solo oculte
+ * estados de animación cuando hay JavaScript disponible (evita FOUC sin JS).
+ */
+function fcb_js_flag() {
+	echo '<script>document.documentElement.classList.add("js");</script>';
+}
+add_action( 'wp_head', 'fcb_js_flag', 1 );
 
 /**
  * Personalizador: textos de portada, video y redes sociales.
@@ -249,6 +259,29 @@ function fcb_hero_button_text() {
 }
 
 /**
+ * Divide un texto en palabras envueltas para la animación de entrada
+ * (cada palabra sube con desenfoque de forma escalonada vía --wi).
+ */
+function fcb_split_words( $text ) {
+	$words = preg_split( '/\s+/', trim( (string) $text ) );
+	$words = array_values( array_filter( $words ) );
+
+	if ( empty( $words ) ) {
+		return '';
+	}
+
+	$html = '';
+	foreach ( $words as $i => $word ) {
+		$html .= '<span class="word"><span class="word-inner" style="--wi:' . (int) $i . '">' . esc_html( $word ) . '</span></span>';
+		if ( $i < count( $words ) - 1 ) {
+			$html .= ' ';
+		}
+	}
+
+	return $html;
+}
+
+/**
  * Video de fondo del hero: ajuste personalizado o assets/video.mp4 del tema.
  */
 function fcb_hero_video_url() {
@@ -269,9 +302,15 @@ function fcb_hero_video_url() {
  * Convocatorias: páginas específicas de los premios Conrado y Charo.
  */
 function fcb_get_convocatorias() {
+	$known_slugs = array(
+		'premio-nacional-de-poesia-conrado-blanco-leon',
+		'premio-nacional-de-poesia-infantil-charo-gonzalez',
+	);
+
+	$post_ids = array();
+
 	$locations = get_nav_menu_locations();
 	$menu_id   = isset( $locations['primary'] ) ? (int) $locations['primary'] : 0;
-	$post_ids  = array();
 
 	if ( $menu_id ) {
 		$menu_items = wp_get_nav_menu_items( $menu_id );
@@ -296,21 +335,28 @@ function fcb_get_convocatorias() {
 		}
 	}
 
-	// Fallback a los slugs conocidos si la detección por menú no encuentra nada
+	// Asegurar siempre los premios conocidos por slug (sin duplicados)
+	$known = new WP_Query(
+		array(
+			'post_type'      => array( 'post', 'page' ),
+			'post_status'    => 'publish',
+			'post_name__in'  => $known_slugs,
+			'orderby'        => 'post_name__in',
+			'posts_per_page' => count( $known_slugs ),
+			'no_found_rows'  => true,
+		)
+	);
+
+	if ( $known->have_posts() ) {
+		foreach ( $known->posts as $known_post ) {
+			if ( ! in_array( (int) $known_post->ID, $post_ids, true ) ) {
+				$post_ids[] = (int) $known_post->ID;
+			}
+		}
+	}
+
 	if ( empty( $post_ids ) ) {
-		return new WP_Query(
-			array(
-				'post_type'      => array( 'post', 'page' ),
-				'post_status'    => 'publish',
-				'post_name__in'  => array(
-					'premio-nacional-de-poesia-conrado-blanco-leon',
-					'premio-nacional-de-poesia-infantil-charo-gonzalez',
-				),
-				'orderby'        => 'post_name__in',
-				'posts_per_page' => 2,
-				'no_found_rows'  => true,
-			)
-		);
+		return $known;
 	}
 
 	return new WP_Query(
@@ -319,7 +365,7 @@ function fcb_get_convocatorias() {
 			'post_status'    => 'publish',
 			'post__in'       => $post_ids,
 			'orderby'        => 'post__in',
-			'posts_per_page' => 2,
+			'posts_per_page' => count( $post_ids ),
 			'no_found_rows'  => true,
 		)
 	);
@@ -592,264 +638,6 @@ function fcb_save_libro_meta( $post_id ) {
 }
 add_action( 'save_post', 'fcb_save_libro_meta' );
 
-function fcb_seed_test_books() {
-	if ( ! get_posts( array( 'post_type' => 'libro', 'posts_per_page' => 1 ) ) ) {
-		$is_production = ( isset( $_SERVER['HTTP_HOST'] ) && ( $_SERVER['HTTP_HOST'] === 'fundacionconradoblanco.com' || $_SERVER['HTTP_HOST'] === 'www.fundacionconradoblanco.com' ) );
-
-		$books_data = array(
-			// Capiteles
-			array(
-				'title'   => 'Capiteles para la historia Bañezana 11',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-XI-LIBRO-b.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/Capiteles11-1.png',
-				'edition' => 'Edición 11 (2025)',
-				'cat'     => 'Capiteles para la historia Bañezana',
-			),
-			array(
-				'title'   => 'Capiteles para la historia Bañezana 10',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-X.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/Capiteles10-1.png',
-				'edition' => 'Edición 10 (2024)',
-				'cat'     => 'Capiteles para la historia Bañezana',
-			),
-			array(
-				'title'   => 'Capiteles para la historia Bañezana 9',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-9.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/Capiteles9-1.png',
-				'edition' => 'Edición 9 (2023)',
-				'cat'     => 'Capiteles para la historia Bañezana',
-			),
-			array(
-				'title'   => 'Capiteles para la historia Bañezana 8',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-8-ed2.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/Capiteles8-1.png',
-				'edition' => 'Edición 8 (2022)',
-				'cat'     => 'Capiteles para la historia Bañezana',
-			),
-			array(
-				'title'   => 'Capiteles para la historia Bañezana 7',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-7-ed2.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/Capiteles7-1.png',
-				'edition' => 'Edición 7 (2021)',
-				'cat'     => 'Capiteles para la historia Bañezana',
-			),
-			array(
-				'title'   => 'Capiteles para la historia Bañezana 6',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-6-ed2.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/Capiteles6-1.png',
-				'edition' => 'Edición 6 (2020)',
-				'cat'     => 'Capiteles para la historia Bañezana',
-			),
-			array(
-				'title'   => 'Capiteles para la historia Bañezana 5',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-5-ed2.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/Capiteles5-1.png',
-				'edition' => 'Edición 5 (2019)',
-				'cat'     => 'Capiteles para la historia Bañezana',
-			),
-			array(
-				'title'   => 'Capiteles para la historia Bañezana 4',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-4-ed3.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/Capiteles4-1.png',
-				'edition' => 'Edición 4 (2018)',
-				'cat'     => 'Capiteles para la historia Bañezana',
-			),
-			array(
-				'title'   => 'Capiteles para la historia Bañezana 3',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-3-ed2.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/Capiteles3-1.png',
-				'edition' => 'Edición 3 (2017)',
-				'cat'     => 'Capiteles para la historia Bañezana',
-			),
-			array(
-				'title'   => 'Capiteles para la historia Bañezana 2',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-2-ed4.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/Capiteles2-1.png',
-				'edition' => 'Edición 2 (2016)',
-				'cat'     => 'Capiteles para la historia Bañezana',
-			),
-			array(
-				'title'   => 'Capiteles para la historia Bañezana 1',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-1-ed5.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/Capiteles1-3.png',
-				'edition' => 'Edición 1 (2015)',
-				'cat'     => 'Capiteles para la historia Bañezana',
-			),
-
-			// Antologías
-			array(
-				'title'   => 'Antología 17 - Corazón de cariño',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2026/03/17-2026-corazon-de-carino-LIBROweb-comprimido.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2026/03/Screenshot-2026-03-16-at-22.39.55-e1773697374882.png',
-				'edition' => 'Antología 17 (2026)',
-				'cat'     => 'Antologías poéticas',
-			),
-			array(
-				'title'   => 'Antología 16 - Corazón de paz',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/09/CHARIN-16-2025-de-corazon-de-paz-LIBRO-b.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/09/Screenshot-2025-09-12-at-13.39.01-e1757677752965.png',
-				'edition' => 'Antología 16 (2025)',
-				'cat'     => 'Antologías poéticas',
-			),
-			array(
-				'title'   => 'Antología 15 - Charin de corazón ilusionado',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2024/08/CHARIN-15-2024-de-corazon-ilusionado-B.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2024/08/Screenshot-2024-08-21-at-20.08.38-e1765491148408.png',
-				'edition' => 'Antología 15 (2024)',
-				'cat'     => 'Antologías poéticas',
-			),
-			array(
-				'title'   => 'Antología 14 - Charin de corazón alegre',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2023/06/charin-14-2023-de-corazon-alegre.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2023/06/Screenshot-2023-06-22-at-13.43.32-e1765491322238.png',
-				'edition' => 'Antología 14 (2023)',
-				'cat'     => 'Antologías poéticas',
-			),
-			array(
-				'title'   => 'Antología 13 - Charin de corazón generoso',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2022/11/Charin13-Corazon-Generoso.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2022/11/Screenshot-2022-11-04-at-13.06.49-e1765491475734.png',
-				'edition' => 'Antología 13 (2022)',
-				'cat'     => 'Antologías poéticas',
-			),
-			array(
-				'title'   => 'Antología 12 - Charin solidaria',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2022/10/charin-solidaria.-Antologia-12.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2022/10/Antologia-12.png',
-				'edition' => 'Antología 12 (2021)',
-				'cat'     => 'Antologías poéticas',
-			),
-
-			// Revistas
-			array(
-				'title'   => 'Revista 16 - Charin literaria',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/09/CHARIN-16-2025-de-corazon-de-paz-LIBRO-b.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/09/Screenshot-2025-09-12-at-13.38.44-e1765490926252.png',
-				'edition' => 'Revista 16 (2025)',
-				'cat'     => 'Revistas infantiles y juveniles «Charin»',
-			),
-			array(
-				'title'   => 'Revista 15 - Charin literaria',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2024/12/charin-15-2024-REVISTA-B.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2024/12/Screenshot-2024-12-16-at-09.50.23-e1765490988884.png',
-				'edition' => 'Revista 15 (2024)',
-				'cat'     => 'Revistas infantiles y juveniles «Charin»',
-			),
-			array(
-				'title'   => 'Revista 14 - Charin literaria',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2023/09/charin-14-2023-REVISTA.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/3d-flip-book/auto-thumbnails/1017.png',
-				'edition' => 'Revista 14 (2023)',
-				'cat'     => 'Revistas infantiles y juveniles «Charin»',
-			),
-			array(
-				'title'   => 'Revista 13 - Charin literaria',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2022/11/charin-13-2021-REVISTA.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/3d-flip-book/auto-thumbnails/822.png',
-				'edition' => 'Revista 13 (2022)',
-				'cat'     => 'Revistas infantiles y juveniles «Charin»',
-			),
-			array(
-				'title'   => 'Revista 12 - Charin literaria',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2022/11/CHARIN-12-2021-REVISTA-1.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/3d-flip-book/auto-thumbnails/827.png',
-				'edition' => 'Revista 12 (2021)',
-				'cat'     => 'Revistas infantiles y juveniles «Charin»',
-			),
-			array(
-				'title'   => 'Revista 11 - Charin literaria',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2021/04/charin-11-2019.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/3d-flip-book/auto-thumbnails/488.png',
-				'edition' => 'Revista 11 (2019)',
-				'cat'     => 'Revistas infantiles y juveniles «Charin»',
-			),
-
-			// Otras publicaciones
-			array(
-				'title'   => 'Antonio Colinas: de la poesía a la narrativa y al ensayo',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2023/06/actas-curso-2022-colinas.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2022/10/cropped-logo-e1664894492176-192x192.png',
-				'edition' => 'Publicación (2023)',
-				'cat'     => 'Otras publicaciones',
-			),
-			array(
-				'title'   => 'Actas I Congreso Internacional de Carnaval',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2023/05/I-ActasCongresoCarnaval2021Libro.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2022/10/cropped-logo-e1664894492176-192x192.png',
-				'edition' => 'Publicación (2023)',
-				'cat'     => 'Otras publicaciones',
-			),
-			array(
-				'title'   => 'Las parroquias de San Martín y Santa María de la Isla',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2022/10/Santa-Maria-de-la-Isla-LIBRO.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2022/10/cropped-logo-e1664894492176-192x192.png',
-				'edition' => 'Publicación (2022)',
-				'cat'     => 'Otras publicaciones',
-			),
-			array(
-				'title'   => 'El pescador de estrellas',
-				'pdf'     => 'https://fundacionconradoblanco.com/wp-content/uploads/2021/04/el-pescador-de-estrellas-LIBRO.pdf',
-				'cover'   => 'https://fundacionconradoblanco.com/wp-content/uploads/2022/10/cropped-logo-e1664894492176-192x192.png',
-				'edition' => 'Publicación (2021)',
-				'cat'     => 'Otras publicaciones',
-			),
-		);
-
-		if ( $is_production ) {
-			// En producción, sembrar los 27 libros con URLs planas
-			foreach ( $books_data as $data ) {
-				$post_id = wp_insert_post( array(
-					'post_title'  => $data['title'],
-					'post_status' => 'publish',
-					'post_type'   => 'libro',
-				) );
-
-				if ( $post_id ) {
-					update_post_meta( $post_id, '_fcb_libro_pdf', $data['pdf'] );
-					update_post_meta( $post_id, '_fcb_libro_cover_url', $data['cover'] );
-					update_post_meta( $post_id, '_fcb_libro_edition', $data['edition'] );
-					
-					// Asignar categoría de libro
-					$term = term_exists( $data['cat'], 'categoria-libro' );
-					if ( ! $term ) {
-						$term = wp_insert_term( $data['cat'], 'categoria-libro' );
-					}
-					if ( ! is_wp_error( $term ) ) {
-						$term_id = is_array( $term ) ? $term['term_id'] : $term;
-						wp_set_post_terms( $post_id, array( (int) $term_id ), 'categoria-libro' );
-					}
-				}
-			}
-		} else {
-			// En local/dev, sembrar solo una pequeña muestra inicial de 4 libros
-			$subset = array_slice( $books_data, 0, 4 );
-			foreach ( $subset as $data ) {
-				$post_id = wp_insert_post( array(
-					'post_title'  => $data['title'],
-					'post_status' => 'publish',
-					'post_type'   => 'libro',
-				) );
-
-				if ( $post_id ) {
-					update_post_meta( $post_id, '_fcb_libro_pdf', $data['pdf'] );
-					update_post_meta( $post_id, '_fcb_libro_cover_url', $data['cover'] );
-					update_post_meta( $post_id, '_fcb_libro_edition', $data['edition'] );
-					
-					$term = term_exists( $data['cat'], 'categoria-libro' );
-					if ( ! $term ) {
-						$term = wp_insert_term( $data['cat'], 'categoria-libro' );
-					}
-					if ( ! is_wp_error( $term ) ) {
-						$term_id = is_array( $term ) ? $term['term_id'] : $term;
-						wp_set_post_terms( $post_id, array( (int) $term_id ), 'categoria-libro' );
-					}
-				}
-			}
-		}
-	}
-}
-add_action( 'init', 'fcb_seed_test_books' );
-
 /**
  * Registro de reglas de reescritura para el visor virtual de PDF.
  */
@@ -863,6 +651,200 @@ function fcb_pdf_viewer_query_vars( $vars ) {
 	return $vars;
 }
 add_filter( 'query_vars', 'fcb_pdf_viewer_query_vars' );
+
+/**
+ * Rutas /files/: sirven archivos desde wp-content/uploads y reescriben las
+ * URLs públicas de uploads a /files/ para que queden más limpias.
+ */
+function fcb_files_rewrite_rule() {
+	add_rewrite_rule( '^files/(.+)$', 'index.php?fcb_file=$1', 'top' );
+}
+add_action( 'init', 'fcb_files_rewrite_rule' );
+
+function fcb_files_query_vars( $vars ) {
+	$vars[] = 'fcb_file';
+	return $vars;
+}
+add_filter( 'query_vars', 'fcb_files_query_vars' );
+
+/**
+ * Convierte una URL de wp-content/uploads en su equivalente /files/.
+ */
+function fcb_files_url( $url ) {
+	if ( ! is_string( $url ) || '' === $url ) {
+		return $url;
+	}
+	$uploads     = wp_upload_dir();
+	$uploads_url = trailingslashit( $uploads['baseurl'] );
+	if ( 0 === strpos( $url, $uploads_url ) ) {
+		return home_url( '/files/' . ltrim( substr( $url, strlen( $uploads_url ) ), '/' ) );
+	}
+	return $url;
+}
+
+/**
+ * Reescritura de las URLs de los meta de libros en el front-end.
+ */
+function fcb_files_rewrite_metadata( $check, $object_id, $meta_key, $single ) {
+	if ( ! is_string( $meta_key ) || ! in_array( $meta_key, array( '_fcb_libro_pdf', '_fcb_libro_ebook', '_fcb_libro_cover_url' ), true ) ) {
+		return $check;
+	}
+
+	static $guard = false;
+	if ( $guard ) {
+		return $check;
+	}
+
+	$guard = true;
+	$all   = get_metadata( 'post', $object_id, '', false );
+	$guard = false;
+
+	if ( empty( $all ) ) {
+		return $check;
+	}
+
+	foreach ( $all as $key => &$values ) {
+		if ( in_array( $key, array( '_fcb_libro_pdf', '_fcb_libro_ebook', '_fcb_libro_cover_url' ), true ) ) {
+			$values = array_map( 'fcb_files_url', (array) $values );
+		}
+	}
+	unset( $values );
+
+	wp_cache_set( $object_id, $all, 'post_meta' );
+
+	if ( $single ) {
+		return isset( $all[ $meta_key ] ) ? maybe_unserialize( reset( $all[ $meta_key ] ) ) : '';
+	}
+
+	return isset( $all[ $meta_key ] ) ? array_map( 'maybe_unserialize', $all[ $meta_key ] ) : array();
+}
+
+if ( ! is_admin() ) {
+	add_filter( 'get_post_metadata', 'fcb_files_rewrite_metadata', 10, 4 );
+	add_filter( 'wp_get_attachment_url', 'fcb_files_url' );
+}
+
+/**
+ * Sirve los archivos de /files/ desde wp-content/uploads con soporte Range
+ * (imprescindible para que los visores de PDF funcionen correctamente).
+ */
+function fcb_serve_files() {
+	$file_rel = get_query_var( 'fcb_file' );
+
+	if ( '' === $file_rel ) {
+		$path = isset( $_SERVER['REQUEST_URI'] ) ? (string) $_SERVER['REQUEST_URI'] : '';
+		$path = (string) wp_parse_url( $path, PHP_URL_PATH );
+		if ( preg_match( '#^/files/(.+)$#', $path, $m ) ) {
+			$file_rel = $m[1];
+		} else {
+			return;
+		}
+	}
+
+	$file_rel = ltrim( str_replace( '\\', '/', (string) $file_rel ), '/' );
+	$file_rel = preg_replace( '#/+#', '/', $file_rel );
+
+	if ( '' === $file_rel || false !== strpos( $file_rel, '..' ) || false !== strpos( $file_rel, "\0" ) ) {
+		status_header( 404 );
+		exit;
+	}
+
+	$uploads      = wp_upload_dir();
+	$basedir_real = realpath( $uploads['basedir'] );
+	$file         = realpath( $uploads['basedir'] . '/' . $file_rel );
+
+	if ( false === $basedir_real || false === $file || 0 !== strpos( $file, $basedir_real . DIRECTORY_SEPARATOR ) || ! is_file( $file ) ) {
+		status_header( 404 );
+		exit;
+	}
+
+	$mime  = wp_check_filetype( $file );
+	$size  = (int) filesize( $file );
+	$range = isset( $_SERVER['HTTP_RANGE'] ) ? (string) $_SERVER['HTTP_RANGE'] : '';
+
+	status_header( 200 );
+	header( 'Content-Type: ' . ( ! empty( $mime['type'] ) ? $mime['type'] : 'application/octet-stream' ) );
+	header( 'Content-Disposition: inline; filename="' . basename( $file ) . '"' );
+	header( 'Content-Length: ' . $size );
+	header( 'Cache-Control: public, max-age=31536000, immutable' );
+	header( 'Accept-Ranges: bytes' );
+
+	if ( '' !== $range && preg_match( '/bytes=(\d+)-(\d*)/', $range, $m ) ) {
+		$start = (int) $m[1];
+		$end   = ( '' !== $m[2] ) ? (int) $m[2] : $size - 1;
+		if ( $start > $end || $start >= $size || $end >= $size ) {
+			status_header( 416 );
+			header( 'Content-Range: bytes */' . $size );
+			exit;
+		}
+		status_header( 206 );
+		header( 'Content-Range: bytes ' . $start . '-' . $end . '/' . $size );
+		header( 'Content-Length: ' . ( $end - $start + 1 ) );
+		$fp = @fopen( $file, 'rb' );
+		if ( $fp ) {
+			fseek( $fp, $start );
+			$remaining = $end - $start + 1;
+			while ( $remaining > 0 && ! feof( $fp ) ) {
+				$chunk = min( 8192, $remaining );
+				echo fread( $fp, $chunk );
+				$remaining -= $chunk;
+				flush();
+			}
+			fclose( $fp );
+		}
+		exit;
+	}
+
+	$fp = @fopen( $file, 'rb' );
+	if ( $fp ) {
+		while ( ! feof( $fp ) ) {
+			echo fread( $fp, 8192 );
+			flush();
+		}
+		fclose( $fp );
+	}
+	exit;
+}
+add_action( 'template_redirect', 'fcb_serve_files' );
+
+/**
+ * Best-effort: redirige (301) wp-content/uploads → /files/ añadiendo una regla
+ * en el .htaccess raíz si es escribible. Los archivos estáticos no pasan por
+ * WordPress, por lo que esta regla a nivel de servidor es la que garantiza el
+ * redirect de las URLs antiguas.
+ */
+function fcb_ensure_files_htaccess() {
+	if ( get_transient( 'fcb_files_htaccess_done' ) ) {
+		return;
+	}
+	set_transient( 'fcb_files_htaccess_done', 1, DAY_IN_SECONDS );
+
+	$htaccess_file = trailingslashit( ABSPATH ) . '.htaccess';
+	if ( ! file_exists( $htaccess_file ) || ! is_writable( $htaccess_file ) ) {
+		return;
+	}
+
+	$contents = (string) file_get_contents( $htaccess_file );
+	if ( false !== strpos( $contents, '# BEGIN FCB files' ) ) {
+		return;
+	}
+
+	$block = "# BEGIN FCB files\n" .
+		"<IfModule mod_rewrite.c>\n" .
+		"RewriteRule ^wp-content/uploads/(.*)$ /files/\$1 [R=301,L,NC]\n" .
+		"</IfModule>\n" .
+		"# END FCB files\n\n";
+
+	$pos = strpos( $contents, '# BEGIN WordPress' );
+	if ( false !== $pos ) {
+		$contents = substr( $contents, 0, $pos ) . $block . substr( $contents, $pos );
+	} else {
+		$contents = $block . $contents;
+	}
+
+	file_put_contents( $htaccess_file, $contents ); // phpcs:ignore
+}
+add_action( 'after_switch_theme', 'fcb_ensure_files_htaccess' );
 
 function fcb_pdf_viewer_template_redirect() {
 	if ( get_query_var( 'fcb_pdf_viewer' ) ) {
@@ -1041,6 +1023,10 @@ function fcb_execute_silent_update() {
 		return $copy_status;
 	}
 
+	flush_rewrite_rules();
+	delete_transient( 'fcb_files_htaccess_done' );
+	fcb_ensure_files_htaccess();
+
 	return true;
 }
 
@@ -1077,6 +1063,7 @@ function fcb_add_admin_management_page() {
 add_action( 'admin_menu', 'fcb_add_admin_management_page' );
 
 function fcb_render_admin_management_page() {
+	fcb_ensure_files_htaccess();
 	?>
 	<div class="wrap">
 		<h1><?php esc_html_e( 'Gestión de Biblioteca y Publicaciones', 'fcb' ); ?></h1>
@@ -1166,6 +1153,18 @@ function fcb_render_admin_management_page() {
 				</div>
 			</div>
 		</div>
+	</div>
+
+	<!-- Caja 5: Eliminar libros duplicados (PDF) -->
+	<div class="card" style="max-width: 100%; margin: 30px 0 0 0; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+		<h2 style="margin-top: 0;"><span class="dashicons dashicons-trash" style="vertical-align: middle; margin-right: 5px;"></span> <?php esc_html_e( 'Eliminar libros duplicados (PDF)', 'fcb' ); ?></h2>
+		<p><?php esc_html_e( 'Busca los libros cuya visualización es un PDF (o que no tienen eBook), es decir, los duplicados que se deben eliminar. Los libros con eBook tipo flipbook se conservan.', 'fcb' ); ?></p>
+		<p style="margin-top: 16px;">
+			<button type="button" id="fcb-find-dupes-btn" class="button button-primary"><?php esc_html_e( 'Buscar duplicados', 'fcb' ); ?></button>
+			<button type="button" id="fcb-delete-dupes-btn" class="button button-secondary" style="display: none;"><?php esc_html_e( 'Enviar a la papelera', 'fcb' ); ?></button>
+		</p>
+		<div id="fcb-dupes-status" style="margin-top: 10px; font-weight: bold; font-size: 12px; line-height: 1.4;"></div>
+		<ul id="fcb-dupes-list" style="max-height: 260px; overflow: auto; margin-top: 12px; padding: 12px 12px 12px 28px; font-size: 12px; line-height: 1.6; background: #fafafa; border: 1px solid #eee; border-radius: 6px;"></ul>
 	</div>
 
 	<script type="text/javascript">
@@ -1299,6 +1298,88 @@ function fcb_render_admin_management_page() {
 			}).fail(function() {
 				$status.css('color', '#dc3232').text('<?php esc_html_e( 'Error de red al inicializar la lista.', 'fcb' ); ?>');
 				$btn.removeClass('disabled').text('<?php esc_html_e( 'Regenerar todas', 'fcb' ); ?>');
+			});
+		});
+
+		// Eliminación de libros duplicados (visualización PDF)
+		function fcbEsc(s) { return $('<div>').text(s || '').html(); }
+		window.fcbDupes = [];
+
+		$('#fcb-find-dupes-btn').on('click', function(e) {
+			e.preventDefault();
+			var $btn = $(this);
+			var $del = $('#fcb-delete-dupes-btn');
+			var $status = $('#fcb-dupes-status');
+			var $list = $('#fcb-dupes-list');
+
+			if ($btn.hasClass('disabled')) {
+				return;
+			}
+
+			$btn.addClass('disabled').text('<?php esc_html_e( 'Buscando...', 'fcb' ); ?>');
+			$status.css('color', '#666').html('<span class="spinner is-active" style="float:none; margin:0 5px 0 0; vertical-align:middle;"></span> <?php esc_html_e( 'Analizando libros...', 'fcb' ); ?>');
+			$list.empty();
+			$del.hide();
+
+			$.post(ajaxurl, {
+				action: 'fcb_find_duplicate_pdf_books',
+				nonce: '<?php echo wp_create_nonce( "fcb_dupes_nonce" ); ?>'
+			}, function(response) {
+				$btn.removeClass('disabled').text('<?php esc_html_e( 'Buscar duplicados', 'fcb' ); ?>');
+				if (response.success) {
+					window.fcbDupes = response.data;
+					if (window.fcbDupes.length === 0) {
+						$status.css('color', '#0e943f').text('<?php esc_html_e( 'No se encontraron libros con visualización PDF (duplicados).', 'fcb' ); ?>');
+						return;
+					}
+					$status.css('color', '#df8a13').text(window.fcbDupes.length + ' <?php esc_html_e( 'libros duplicados encontrados. Revisa la lista y envía a la papelera.', 'fcb' ); ?>');
+					var rows = [];
+					$.each(window.fcbDupes, function(i, b) {
+						rows.push('<li>[' + b.id + '] ' + fcbEsc(b.title) + (b.ebook ? ' — ' + fcbEsc(b.ebook) : ' — <?php esc_html_e( 'sin eBook', 'fcb' ); ?>') + '</li>');
+					});
+					$list.html(rows.join(''));
+					$del.show();
+				} else {
+					$status.css('color', '#dc3232').text(response.data);
+				}
+			}).fail(function() {
+				$btn.removeClass('disabled').text('<?php esc_html_e( 'Buscar duplicados', 'fcb' ); ?>');
+				$status.css('color', '#dc3232').text('<?php esc_html_e( 'Error de red al analizar los libros.', 'fcb' ); ?>');
+			});
+		});
+
+		$('#fcb-delete-dupes-btn').on('click', function(e) {
+			e.preventDefault();
+			var $btn = $(this);
+			var $status = $('#fcb-dupes-status');
+			var ids = (window.fcbDupes || []).map(function(b) { return b.id; });
+
+			if (ids.length === 0) {
+				return;
+			}
+
+			if (!confirm(ids.length + ' <?php esc_html_e( 'libros se enviarán a la papelera (se pueden recuperar). ¿Continuar?', 'fcb' ); ?>')) {
+				return;
+			}
+
+			$btn.addClass('disabled').text('<?php esc_html_e( 'Borrando...', 'fcb' ); ?>');
+
+			$.post(ajaxurl, {
+				action: 'fcb_delete_duplicate_pdf_books',
+				ids: ids,
+				nonce: '<?php echo wp_create_nonce( "fcb_dupes_nonce" ); ?>'
+			}, function(response) {
+				if (response.success) {
+					$status.css('color', '#0e943f').text(response.data.trashed + ' <?php esc_html_e( 'de', 'fcb' ); ?> ' + response.data.requested + ' <?php esc_html_e( 'libros enviados a la papelera.', 'fcb' ); ?>');
+					$('#fcb-dupes-list').empty();
+					window.fcbDupes = [];
+				} else {
+					$status.css('color', '#dc3232').text(response.data);
+				}
+				$btn.hide().removeClass('disabled');
+			}).fail(function() {
+				$btn.hide().removeClass('disabled');
+				$status.css('color', '#dc3232').text('<?php esc_html_e( 'Error de red al enviar a la papelera.', 'fcb' ); ?>');
 			});
 		});
 	});
@@ -1630,5 +1711,82 @@ function fcb_regenerate_single_cover_ajax() {
 	}
 }
 add_action( 'wp_ajax_fcb_regenerate_single_cover', 'fcb_regenerate_single_cover_ajax' );
+
+/**
+ * Indica si la URL de visualización de un libro es un PDF (o no existe), es
+ * decir, si es un duplicado que se debe eliminar.
+ */
+function fcb_is_pdf_visualization( $ebook_url ) {
+	if ( empty( $ebook_url ) ) {
+		return true;
+	}
+	$path = (string) wp_parse_url( $ebook_url, PHP_URL_PATH );
+	return strtolower( substr( $path, -4 ) ) === '.pdf';
+}
+
+/**
+ * AJAX Handler: lista los libros cuya visualización es un PDF (sin flipbook).
+ */
+function fcb_find_duplicate_pdf_books_ajax() {
+	check_ajax_referer( 'fcb_dupes_nonce', 'nonce' );
+
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_send_json_error( __( 'Permisos insuficientes.', 'fcb' ) );
+	}
+
+	$books = get_posts( array(
+		'post_type'      => 'libro',
+		'posts_per_page' => -1,
+		'post_status'    => 'any',
+		'orderby'        => 'title',
+		'order'          => 'ASC',
+	) );
+
+	$dupes = array();
+	foreach ( $books as $book ) {
+		$ebook = get_post_meta( $book->ID, '_fcb_libro_ebook', true );
+		if ( fcb_is_pdf_visualization( $ebook ) ) {
+			$dupes[] = array(
+				'id'    => (int) $book->ID,
+				'title' => $book->post_title,
+				'ebook' => $ebook ? $ebook : '',
+			);
+		}
+	}
+
+	wp_send_json_success( $dupes );
+}
+add_action( 'wp_ajax_fcb_find_duplicate_pdf_books', 'fcb_find_duplicate_pdf_books_ajax' );
+
+/**
+ * AJAX Handler: envía a la papelera los libros duplicados indicados.
+ */
+function fcb_delete_duplicate_pdf_books_ajax() {
+	check_ajax_referer( 'fcb_dupes_nonce', 'nonce' );
+
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_send_json_error( __( 'Permisos insuficientes.', 'fcb' ) );
+	}
+
+	$ids = isset( $_POST['ids'] ) ? array_map( 'absint', (array) wp_unslash( $_POST['ids'] ) ) : array(); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+	$ids = array_values( array_filter( $ids ) );
+
+	if ( empty( $ids ) ) {
+		wp_send_json_error( __( 'No se recibieron IDs de libros.', 'fcb' ) );
+	}
+
+	$trashed = 0;
+	foreach ( $ids as $book_id ) {
+		if ( 'libro' === get_post_type( $book_id ) && wp_trash_post( $book_id ) ) {
+			$trashed++;
+		}
+	}
+
+	wp_send_json_success( array(
+		'trashed'   => $trashed,
+		'requested' => count( $ids ),
+	) );
+}
+add_action( 'wp_ajax_fcb_delete_duplicate_pdf_books', 'fcb_delete_duplicate_pdf_books_ajax' );
 
 

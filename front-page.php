@@ -15,18 +15,22 @@ $social        = fcb_social_links();
 
 $btn_url = get_theme_mod( 'fcb_hero_btn_url', '' );
 if ( ! $btn_url && $convocatorias->have_posts() ) {
-	$convocatorias->the_post();
-	$btn_url = get_permalink();
-	wp_reset_postdata();
+	$btn_url = get_permalink( $convocatorias->posts[0] );
 }
 ?>
 
-<section class="hero">
+<section class="hero is-loading">
 	<?php if ( $video_url ) : ?>
 		<video class="hero-video" autoplay muted loop playsinline preload="metadata">
 			<source src="<?php echo esc_url( $video_url ); ?>" type="video/mp4">
 		</video>
 		<div class="hero-overlay" aria-hidden="true"></div>
+		<div class="hero-loader" aria-hidden="true">
+			<span class="hero-loader__content">
+				<img class="hero-loader__logo" src="https://hosted.inled.es/logo.fundacionconradoblanco.sf_.png" alt="" />
+				<span class="hero-loader__bar"><span class="hero-loader__bar-fill"></span></span>
+			</span>
+		</div>
 	<?php endif; ?>
 
 	<div class="container hero-inner">
@@ -36,13 +40,13 @@ if ( ! $btn_url && $convocatorias->have_posts() ) {
 			</a>
 		</div>
 
-		<h1 class="hero-title"><?php echo esc_html( fcb_hero_title() ); ?></h1>
+		<h1 class="hero-title"><?php echo fcb_split_words( fcb_hero_title() ); ?></h1>
 		<p class="hero-subtitle"><?php echo esc_html( fcb_hero_subtitle() ); ?></p>
 
 		<?php if ( $btn_url || ! empty( $social ) ) : ?>
 			<div class="hero-actions">
 				<?php if ( $btn_url ) : ?>
-					<a class="btn btn--red" href="<?php echo esc_url( $btn_url ); ?>"><?php echo esc_html( fcb_hero_button_text() ); ?></a>
+					<a class="btn btn--ghost" href="<?php echo esc_url( $btn_url ); ?>"><?php echo esc_html( fcb_hero_button_text() ); ?></a>
 				<?php endif; ?>
 
 				<?php if ( ! empty( $social ) ) : ?>
@@ -67,8 +71,7 @@ if ( ! $btn_url && $convocatorias->have_posts() ) {
 	<section class="section section--alt" id="convocatorias">
 		<div class="container">
 			<header class="section-head">
-				<p class="section-kicker"><?php esc_html_e( 'Premios de poesía', 'fcb' ); ?></p>
-				<h2 class="section-title"><?php echo esc_html( get_theme_mod( 'fcb_section_concursos', 'Convocatorias' ) ); ?></h2>
+				<h2 class="section-title"><?php echo fcb_split_words( get_theme_mod( 'fcb_section_concursos', 'Convocatorias' ) ); ?></h2>
 			</header>
 
 			<div class="cards-grid cards-grid--2">
@@ -80,7 +83,7 @@ if ( ! $btn_url && $convocatorias->have_posts() ) {
 						<div class="card-body">
 							<h3 class="card-title"><a href="<?php the_permalink(); ?>"><?php the_title(); ?></a></h3>
 							<p class="card-excerpt"><?php echo esc_html( wp_trim_words( get_the_excerpt(), 22 ) ); ?></p>
-							<span class="card-cta"><?php esc_html_e( 'Ver bases →', 'fcb' ); ?></span>
+							<span class="card-cta"><?php esc_html_e( 'Ver bases', 'fcb' ); ?><i data-lucide="arrow-right" aria-hidden="true"></i></span>
 						</div>
 					</article>
 				<?php endwhile; ?>
@@ -97,10 +100,9 @@ endif;
 		<div class="container">
 			<header class="section-head section-head--row">
 				<div>
-					<p class="section-kicker"><?php esc_html_e( 'Actualidad', 'fcb' ); ?></p>
-					<h2 class="section-title"><?php echo esc_html( get_theme_mod( 'fcb_section_noticias', 'Noticias' ) ); ?></h2>
+					<h2 class="section-title"><?php echo fcb_split_words( get_theme_mod( 'fcb_section_noticias', 'Noticias' ) ); ?></h2>
 				</div>
-				<a class="text-link" href="<?php echo esc_url( home_url( '/noticias/' ) ); ?>"><?php esc_html_e( 'Ver todas', 'fcb' ); ?> →</a>
+				<a class="text-link" href="<?php echo esc_url( home_url( '/noticias/' ) ); ?>"><?php esc_html_e( 'Ver todas', 'fcb' ); ?><i data-lucide="arrow-right" aria-hidden="true"></i></a>
 			</header>
 
 			<div class="cards-grid cards-grid--3">
@@ -117,7 +119,7 @@ endif;
 						<div class="card-body">
 							<h3 class="card-title"><a href="<?php the_permalink(); ?>"><?php the_title(); ?></a></h3>
 							<p class="card-excerpt"><?php echo esc_html( wp_trim_words( get_the_excerpt(), 20 ) ); ?></p>
-							<span class="card-cta"><?php esc_html_e( 'Leer más →', 'fcb' ); ?></span>
+							<span class="card-cta"><?php esc_html_e( 'Leer más', 'fcb' ); ?><i data-lucide="arrow-right" aria-hidden="true"></i></span>
 						</div>
 					</article>
 				<?php endwhile; ?>
@@ -133,8 +135,7 @@ endif;
 	<section class="section section--alt" id="la-fundacion">
 		<div class="container">
 			<header class="section-head">
-				<p class="section-kicker"><?php esc_html_e( 'Conócenos', 'fcb' ); ?></p>
-				<h2 class="section-title"><?php echo esc_html( get_theme_mod( 'fcb_section_paginas', 'La Fundación' ) ); ?></h2>
+				<h2 class="section-title"><?php echo fcb_split_words( get_theme_mod( 'fcb_section_paginas', 'La Fundación' ) ); ?></h2>
 			</header>
 
 			<div class="cards-grid cards-grid--4">
@@ -159,7 +160,7 @@ endif;
 								<?php endif; ?>
 							<?php endif; ?>
 
-							<span class="card-cta"><?php esc_html_e( 'Explorar →', 'fcb' ); ?></span>
+							<span class="card-cta"><?php esc_html_e( 'Explorar', 'fcb' ); ?><i data-lucide="arrow-right" aria-hidden="true"></i></span>
 						</div>
 					</article>
 				<?php endforeach; ?>
@@ -188,10 +189,9 @@ endif;
 				<div class="container">
 					<header class="section-head section-head--row">
 						<div>
-							<p class="section-kicker"><?php esc_html_e( 'Colecciones', 'fcb' ); ?></p>
-							<h2 class="section-title"><?php echo esc_html( $section_title ); ?></h2>
+							<h2 class="section-title"><?php echo fcb_split_words( $section_title ); ?></h2>
 						</div>
-						<a class="text-link" href="<?php echo esc_url( $view_all_url ); ?>"><?php esc_html_e( 'Ver biblioteca', 'fcb' ); ?> →</a>
+						<a class="text-link" href="<?php echo esc_url( $view_all_url ); ?>"><?php esc_html_e( 'Ver biblioteca', 'fcb' ); ?><i data-lucide="arrow-right" aria-hidden="true"></i></a>
 					</header>
 
 					<div class="cards-grid cards-grid--4">
@@ -253,8 +253,7 @@ endif;
 <section class="section" id="comunidad">
 	<div class="container">
 		<header class="section-head">
-			<p class="section-kicker"><?php esc_html_e( 'Redes Sociales', 'fcb' ); ?></p>
-			<h2 class="section-title"><?php esc_html_e( 'Comunidad y Multimedia', 'fcb' ); ?></h2>
+			<h2 class="section-title"><?php echo fcb_split_words( __( 'Comunidad y Multimedia', 'fcb' ) ); ?></h2>
 		</header>
 
 		<div class="comunidad-grid">
@@ -308,7 +307,7 @@ document.addEventListener("DOMContentLoaded", function() {
 					<a href="${item.link}" target="_blank" rel="noopener noreferrer" class="yt-card-link">
 						<div class="yt-thumb-wrapper">
 							<img src="${item.thumbnail}" alt="${item.title}" class="yt-thumb" />
-							<span class="yt-play-btn">▶</span>
+							<span class="yt-play-btn" aria-hidden="true"></span>
 						</div>
 						<div class="yt-card-info">
 							<h4 class="yt-video-title">${item.title}</h4>
