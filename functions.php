@@ -1064,9 +1064,19 @@ function fcb_render_admin_management_page() {
 				</p>
 			</div>
 
-			<!-- Caja 3: Actualizaciones del Tema -->
+			<!-- Caja 3: Mantenimiento de Portadas -->
 			<div class="card" style="max-width: 100%; margin: 0; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
-				<h2 style="margin-top: 0;"><span class="dashicons dashicons-update" style="vertical-align: middle; margin-right: 5px;"></span> <?php esc_html_e( 'Actualizaciones de GitHub', 'fcb' ); ?></h2>
+				<h2 style="margin-top: 0;"><span class="dashicons dashicons-hammer" style="vertical-align: middle; margin-right: 5px;"></span> <?php esc_html_e( 'Portadas desde PDF', 'fcb' ); ?></h2>
+				<p><?php esc_html_e( 'Regenera las portadas de todos los libros existentes extrayendo la primera página de sus archivos PDF.', 'fcb' ); ?></p>
+				<p style="margin-top: 20px;">
+					<button type="button" id="fcb-regen-covers-btn" class="button button-primary"><?php esc_html_e( 'Regenerar todas', 'fcb' ); ?></button>
+				</p>
+				<div id="fcb-regen-status" style="margin-top: 10px; font-weight: bold; font-size: 11px; line-height: 1.4;"></div>
+			</div>
+
+			<!-- Caja 4: Actualizaciones del Tema -->
+			<div class="card" style="max-width: 100%; margin: 0; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+				<h2 style="margin-top: 0;"><span class="dashicons dashicons-update" style="vertical-align: middle; margin-right: 5px;"></span> <?php esc_html_e( 'Actualizaciones Git', 'fcb' ); ?></h2>
 				<p><?php esc_html_e( 'Comprueba y descarga la última versión del tema de la Fundación directamente desde el repositorio Git público.', 'fcb' ); ?></p>
 				<p style="margin-top: 20px;">
 					<a href="<?php echo esc_url( admin_url( 'customize.php?autofocus[section]=fcb_github_update_section' ) ); ?>" class="button button-primary"><?php esc_html_e( 'Ir a Actualizaciones', 'fcb' ); ?></a>
@@ -1120,6 +1130,7 @@ function fcb_render_admin_management_page() {
 
 	<script type="text/javascript">
 	jQuery(document).ready(function($) {
+		// Importación de JSON
 		$('#fcb-json-import-btn').on('click', function(e) {
 			e.preventDefault();
 			var $btn = $(this);
@@ -1157,6 +1168,39 @@ function fcb_render_admin_management_page() {
 			}).fail(function() {
 				$btn.removeClass('disabled').text('<?php esc_html_e( 'Comenzar Importación', 'fcb' ); ?>');
 				$status.css('color', '#dc3232').text('<?php esc_html_e( 'Error de red en el proceso de importación.', 'fcb' ); ?>');
+			});
+		});
+
+		// Regeneración de Portadas
+		$('#fcb-regen-covers-btn').on('click', function(e) {
+			e.preventDefault();
+			var $btn = $(this);
+			var $status = $('#fcb-regen-status');
+
+			if ($btn.hasClass('disabled')) {
+				return;
+			}
+
+			if (!confirm('<?php esc_html_e( '¿Quieres regenerar las portadas de todos los libros desde sus PDFs? Este proceso puede tardar unos momentos.', 'fcb' ); ?>')) {
+				return;
+			}
+
+			$btn.addClass('disabled').text('<?php esc_html_e( 'Procesando...', 'fcb' ); ?>');
+			$status.css('color', '#666').html('<span class="spinner is-active" style="float:none; margin:0 5px 0 0; vertical-align:middle;"></span> <?php esc_html_e( 'Extrayendo portadas de los PDFs. Por favor, no cierres esta ventana...', 'fcb' ); ?>');
+
+			$.post(ajaxurl, {
+				action: 'fcb_regenerate_covers',
+				nonce: '<?php echo wp_create_nonce( "fcb_regen_covers_nonce" ); ?>'
+			}, function(response) {
+				$btn.removeClass('disabled').text('<?php esc_html_e( 'Regenerar todas', 'fcb' ); ?>');
+				if (response.success) {
+					$status.css('color', '#0e943f').html(response.data);
+				} else {
+					$status.css('color', '#dc3232').html(response.data);
+				}
+			}).fail(function() {
+				$btn.removeClass('disabled').text('<?php esc_html_e( 'Regenerar todas', 'fcb' ); ?>');
+				$status.css('color', '#dc3232').text('<?php esc_html_e( 'Error de red durante la regeneración.', 'fcb' ); ?>');
 			});
 		});
 	});
@@ -1365,5 +1409,76 @@ function fcb_generate_cover_from_pdf( $pdf_path, $post_id ) {
 
 	return $attachment_id;
 }
+
+/**
+ * AJAX Handler para regenerar portadas de libros desde sus PDFs.
+ */
+function fcb_regenerate_covers_ajax() {
+	check_ajax_referer( 'fcb_regen_covers_nonce', 'nonce' );
+
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_send_json_error( __( 'Permisos insuficientes.', 'fcb' ) );
+	}
+
+	// Aumentar tiempo de ejecución y límite de memoria
+	@set_time_limit( 300 );
+	@ini_set( 'memory_limit', '256M' );
+
+	$books = get_posts( array(
+		'post_type'      => 'libro',
+		'posts_per_page' => -1,
+	) );
+
+	if ( empty( $books ) ) {
+		wp_send_json_success( __( 'No hay libros registrados en la base de datos.', 'fcb' ) );
+	}
+
+	$success_count = 0;
+	$fail_count    = 0;
+	$errors        = array();
+
+	foreach ( $books as $book ) {
+		$pdf_url = get_post_meta( $book->ID, '_fcb_libro_pdf', true );
+		if ( empty( $pdf_url ) ) {
+			continue;
+		}
+
+		$pdf_path = '';
+		if ( strpos( $pdf_url, home_url() ) !== false ) {
+			global $wpdb;
+			$attachment_id = $wpdb->get_var( $wpdb->prepare(
+				"SELECT ID FROM $wpdb->posts WHERE guid = %s AND post_type = 'attachment'",
+				$pdf_url
+			) );
+			if ( $attachment_id ) {
+				$pdf_path = get_attached_file( $attachment_id );
+			}
+		}
+
+		if ( ! empty( $pdf_path ) && file_exists( $pdf_path ) ) {
+			$pdf_cover_id = fcb_generate_cover_from_pdf( $pdf_path, $book->ID );
+			if ( ! is_wp_error( $pdf_cover_id ) ) {
+				set_post_thumbnail( $book->ID, $pdf_cover_id );
+				$local_cover = wp_get_attachment_url( $pdf_cover_id );
+				update_post_meta( $book->ID, '_fcb_libro_cover_url', $local_cover );
+				$success_count++;
+			} else {
+				$fail_count++;
+				$errors[] = sprintf( __( '"%s": %s', 'fcb' ), $book->post_title, $pdf_cover_id->get_error_message() );
+			}
+		} else {
+			$fail_count++;
+			$errors[] = sprintf( __( '"%s": No se encontró el archivo PDF local.', 'fcb' ), $book->post_title );
+		}
+	}
+
+	$message = sprintf( __( 'Proceso completado. Se generaron %d portadas con éxito y %d fallaron.', 'fcb' ), $success_count, $fail_count );
+	if ( ! empty( $errors ) ) {
+		$message .= '<br/><br/><strong>Detalles de fallos:</strong><br/>' . implode( '<br/>', $errors );
+	}
+
+	wp_send_json_success( $message );
+}
+add_action( 'wp_ajax_fcb_regenerate_covers', 'fcb_regenerate_covers_ajax' );
 
 
