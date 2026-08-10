@@ -1155,10 +1155,10 @@ function fcb_render_admin_management_page() {
 		</div>
 	</div>
 
-	<!-- Caja 5: Eliminar libros duplicados (PDF) -->
+	<!-- Caja 5: Eliminar libros duplicados -->
 	<div class="card" style="max-width: 100%; margin: 30px 0 0 0; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
-		<h2 style="margin-top: 0;"><span class="dashicons dashicons-trash" style="vertical-align: middle; margin-right: 5px;"></span> <?php esc_html_e( 'Eliminar libros duplicados (PDF)', 'fcb' ); ?></h2>
-		<p><?php esc_html_e( 'Busca los libros cuya visualización es un PDF (o que no tienen eBook), es decir, los duplicados que se deben eliminar. Los libros con eBook tipo flipbook se conservan.', 'fcb' ); ?></p>
+		<h2 style="margin-top: 0;"><span class="dashicons dashicons-trash" style="vertical-align: middle; margin-right: 5px;"></span> <?php esc_html_e( 'Eliminar libros duplicados', 'fcb' ); ?></h2>
+		<p><?php esc_html_e( 'Busca los libros cuya visualización es un PDF (sin flipbook) y los duplicados por título aunque ambos tengan flipbook. Se conserva una única copia de cada libro.', 'fcb' ); ?></p>
 		<p style="margin-top: 16px;">
 			<button type="button" id="fcb-find-dupes-btn" class="button button-primary"><?php esc_html_e( 'Buscar duplicados', 'fcb' ); ?></button>
 			<button type="button" id="fcb-delete-dupes-btn" class="button button-secondary" style="display: none;"><?php esc_html_e( 'Enviar a la papelera', 'fcb' ); ?></button>
@@ -1332,10 +1332,10 @@ function fcb_render_admin_management_page() {
 						$status.css('color', '#0e943f').text('<?php esc_html_e( 'No se encontraron libros con visualización PDF (duplicados).', 'fcb' ); ?>');
 						return;
 					}
-					$status.css('color', '#df8a13').text(window.fcbDupes.length + ' <?php esc_html_e( 'libros duplicados encontrados. Revisa la lista y envía a la papelera.', 'fcb' ); ?>');
+					$status.css('color', '#df8a13').text(window.fcbDupes.length + ' <?php esc_html_e( 'libros duplicados encontrados (PDF y flipbooks repetidos). Revisa la lista y envía a la papelera.', 'fcb' ); ?>');
 					var rows = [];
 					$.each(window.fcbDupes, function(i, b) {
-						rows.push('<li>[' + b.id + '] ' + fcbEsc(b.title) + (b.ebook ? ' — ' + fcbEsc(b.ebook) : ' — <?php esc_html_e( 'sin eBook', 'fcb' ); ?>') + '</li>');
+						rows.push('<li>[' + b.id + '] <strong>' + fcbEsc(b.title) + '</strong> — ' + fcbEsc(b.reason));
 					});
 					$list.html(rows.join(''));
 					$del.show();
@@ -1725,7 +1725,16 @@ function fcb_is_pdf_visualization( $ebook_url ) {
 }
 
 /**
- * AJAX Handler: lista los libros cuya visualización es un PDF (sin flipbook).
+ * Normaliza un título para comparar duplicados.
+ */
+function fcb_normalize_title( $title ) {
+	$title = trim( (string) $title );
+	$title = function_exists( 'mb_strtolower' ) ? mb_strtolower( $title, 'UTF-8' ) : strtolower( $title );
+	return preg_replace( '/\s+/', ' ', $title );
+}
+
+/**
+ * AJAX Handler: lista los libros duplicados (visualización PDF o mismo título).
  */
 function fcb_find_duplicate_pdf_books_ajax() {
 	check_ajax_referer( 'fcb_dupes_nonce', 'nonce' );
@@ -1743,14 +1752,32 @@ function fcb_find_duplicate_pdf_books_ajax() {
 	) );
 
 	$dupes = array();
+	$seen  = array();
+
 	foreach ( $books as $book ) {
-		$ebook = get_post_meta( $book->ID, '_fcb_libro_ebook', true );
-		if ( fcb_is_pdf_visualization( $ebook ) ) {
+		$ebook  = get_post_meta( $book->ID, '_fcb_libro_ebook', true );
+		$is_pdf = fcb_is_pdf_visualization( $ebook );
+		$ntitle = fcb_normalize_title( $book->post_title );
+
+		if ( $is_pdf ) {
 			$dupes[] = array(
-				'id'    => (int) $book->ID,
-				'title' => $book->post_title,
-				'ebook' => $ebook ? $ebook : '',
+				'id'     => (int) $book->ID,
+				'title'  => $book->post_title,
+				'ebook'  => $ebook ? $ebook : '',
+				'reason' => __( 'Visualización en PDF (sin flipbook)', 'fcb' ),
 			);
+			continue;
+		}
+
+		if ( '' !== $ntitle && isset( $seen[ $ntitle ] ) ) {
+			$dupes[] = array(
+				'id'     => (int) $book->ID,
+				'title'  => $book->post_title,
+				'ebook'  => $ebook,
+				'reason' => sprintf( __( 'Duplicado por título (ambos con flipbook) — ya existe "%s"', 'fcb' ), get_the_title( $seen[ $ntitle ] ) ),
+			);
+		} elseif ( '' !== $ntitle ) {
+			$seen[ $ntitle ] = $book->ID;
 		}
 	}
 

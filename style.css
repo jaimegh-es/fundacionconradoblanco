@@ -328,6 +328,30 @@ html.js body.hero-loaded .site-header .site-branding {
 }
 .hero-social a:hover { background: #fff; color: var(--fcb-green-darker); border-color: #fff; }
 
+/* Indicador "Desliza para ver más" */
+.hero-scroll {
+  position: absolute; left: 50%; bottom: 26px;
+  transform: translateX(-50%);
+  display: inline-flex; flex-direction: column; align-items: center; gap: 8px;
+  color: #fff; text-decoration: none;
+  z-index: 2;
+}
+.hero-scroll:hover { color: #fff; }
+.hero-scroll__label {
+  font-size: 0.82rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.35);
+}
+.hero-scroll__arrow {
+  width: 28px; height: 28px;
+  animation: hero-scroll-bounce 1.8s ease-in-out infinite;
+}
+.hero-scroll:hover .hero-scroll__arrow { animation-duration: 0.9s; }
+@keyframes hero-scroll-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(8px); }
+}
+
 /* Aparición del hero: logo, títulos y botones entran con desenfoque */
 html.js .hero-logo,
 html.js .hero-actions {
@@ -344,6 +368,17 @@ html.js .hero-actions {
 }
 .hero.is-loaded .hero-logo { transition-delay: .05s; }
 .hero.is-loaded .hero-actions { transition-delay: .55s; }
+
+html.js .hero-scroll {
+  opacity: 0;
+  filter: blur(10px);
+  transition: opacity .7s ease, filter .7s ease;
+}
+.hero.is-loaded .hero-scroll {
+  opacity: 1;
+  filter: blur(0);
+  transition-delay: .95s;
+}
 
 .word { display: inline-block; overflow: hidden; vertical-align: top; }
 html.js .word-inner {
@@ -850,6 +885,8 @@ html.js .section .comunidad-grid {
 @media (max-width: 640px) {
   .cards-grid--2, .cards-grid--3, .cards-grid--4 { grid-template-columns: 1fr; }
   .hero-inner { padding: 110px 20px 70px; }
+  .hero-scroll { bottom: 18px; }
+  .hero-scroll__label { display: none; }
   .section { padding: 54px 0; }
   .section-head--row { flex-direction: column; align-items: flex-start; }
   .entry { padding: 28px 20px; }
@@ -1206,4 +1243,11 @@ html.fcb-transitioning.fcb-arriving .fcb-transition-overlay {
     opacity: 1;
     transition: none;
   }
+  html.js .hero-scroll {
+    transform: translateX(-50%);
+    filter: none;
+    opacity: 1;
+    transition: none;
+  }
+  .hero-scroll__arrow { animation: none; }
 }

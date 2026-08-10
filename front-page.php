@@ -65,6 +65,11 @@ if ( ! $btn_url && $convocatorias->have_posts() ) {
 			</div>
 		<?php endif; ?>
 	</div>
+
+	<a class="hero-scroll" href="#convocatorias">
+		<span class="hero-scroll__label"><?php esc_html_e( 'Desliza para ver más', 'fcb' ); ?></span>
+		<svg class="hero-scroll__arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M12 5v14"></path><path d="M19 12l-7 7-7-7"></path></svg>
+	</a>
 </section>
 
 <?php if ( $convocatorias->have_posts() ) : ?>
