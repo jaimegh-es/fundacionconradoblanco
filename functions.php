@@ -1181,26 +1181,84 @@ function fcb_render_admin_management_page() {
 				return;
 			}
 
-			if (!confirm('<?php esc_html_e( '¿Quieres regenerar las portadas de todos los libros desde sus PDFs? Este proceso puede tardar unos momentos.', 'fcb' ); ?>')) {
+			if (!confirm('<?php esc_html_e( '¿Quieres regenerar las portadas de todos los libros desde sus PDFs? El proceso se ejecutará paso a paso para evitar errores de red.', 'fcb' ); ?>')) {
 				return;
 			}
 
-			$btn.addClass('disabled').text('<?php esc_html_e( 'Procesando...', 'fcb' ); ?>');
-			$status.css('color', '#666').html('<span class="spinner is-active" style="float:none; margin:0 5px 0 0; vertical-align:middle;"></span> <?php esc_html_e( 'Extrayendo portadas de los PDFs. Por favor, no cierres esta ventana...', 'fcb' ); ?>');
+			$btn.addClass('disabled').text('<?php esc_html_e( 'Preparando...', 'fcb' ); ?>');
+			$status.css('color', '#666').html('<span class="spinner is-active" style="float:none; margin:0 5px 0 0; vertical-align:middle;"></span> <?php esc_html_e( 'Obteniendo listado de libros...', 'fcb' ); ?>');
 
+			// Obtener IDs de libros
 			$.post(ajaxurl, {
-				action: 'fcb_regenerate_covers',
+				action: 'fcb_get_book_ids_for_regen',
 				nonce: '<?php echo wp_create_nonce( "fcb_regen_covers_nonce" ); ?>'
 			}, function(response) {
-				$btn.removeClass('disabled').text('<?php esc_html_e( 'Regenerar todas', 'fcb' ); ?>');
 				if (response.success) {
-					$status.css('color', '#0e943f').html(response.data);
+					var bookIds = response.data;
+					if (bookIds.length === 0) {
+						$status.css('color', '#df8a13').text('<?php esc_html_e( 'No hay libros registrados en la base de datos.', 'fcb' ); ?>');
+						$btn.removeClass('disabled').text('<?php esc_html_e( 'Regenerar todas', 'fcb' ); ?>');
+						return;
+					}
+
+					var total = bookIds.length;
+					var processed = 0;
+					var successCount = 0;
+					var failCount = 0;
+					var errors = [];
+
+					$btn.text('<?php esc_html_e( 'Procesando...', 'fcb' ); ?>');
+
+					function processNextBook() {
+						if (processed >= total) {
+							// Finalizado
+							$btn.removeClass('disabled').text('<?php esc_html_e( 'Regenerar todas', 'fcb' ); ?>');
+							var finishMsg = '<strong>' + '<?php esc_html_e( 'Proceso completado.', 'fcb' ); ?>' + '</strong> ' + 
+								processed + ' ' + '<?php esc_html_e( 'libros analizados.', 'fcb' ); ?>' + ' ' + 
+								successCount + ' ' + '<?php esc_html_e( 'exitosos', 'fcb' ); ?>' + ', ' + 
+								failCount + ' ' + '<?php esc_html_e( 'fallidos.', 'fcb' ); ?>';
+							if (errors.length > 0) {
+								finishMsg += '<br/><br/><strong>' + '<?php esc_html_e( 'Detalles de fallos:', 'fcb' ); ?>' + '</strong><br/>' + errors.join('<br/>');
+								$status.css('color', '#df8a13').html(finishMsg);
+							} else {
+								$status.css('color', '#0e943f').html(finishMsg);
+							}
+							return;
+						}
+
+						var currentId = bookIds[processed];
+						processed++;
+						$status.css('color', '#666').html('<span class="spinner is-active" style="float:none; margin:0 5px 0 0; vertical-align:middle;"></span> ' + 
+							'<?php esc_html_e( 'Procesando libro', 'fcb' ); ?> ' + processed + ' ' + '<?php esc_html_e( 'de', 'fcb' ); ?> ' + total + '...');
+
+						$.post(ajaxurl, {
+							action: 'fcb_regenerate_single_cover',
+							book_id: currentId,
+							nonce: '<?php echo wp_create_nonce( "fcb_regen_covers_nonce" ); ?>'
+						}, function(res) {
+							if (res.success) {
+								successCount++;
+							} else {
+								failCount++;
+								errors.push(res.data);
+							}
+							processNextBook();
+						}).fail(function() {
+							failCount++;
+							errors.push('ID ' + currentId + ': ' + '<?php esc_html_e( 'Error de red en esta petición.', 'fcb' ); ?>');
+							processNextBook();
+						});
+					}
+
+					processNextBook();
+
 				} else {
-					$status.css('color', '#dc3232').html(response.data);
+					$status.css('color', '#dc3232').text(response.data);
+					$btn.removeClass('disabled').text('<?php esc_html_e( 'Regenerar todas', 'fcb' ); ?>');
 				}
 			}).fail(function() {
+				$status.css('color', '#dc3232').text('<?php esc_html_e( 'Error de red al inicializar la lista.', 'fcb' ); ?>');
 				$btn.removeClass('disabled').text('<?php esc_html_e( 'Regenerar todas', 'fcb' ); ?>');
-				$status.css('color', '#dc3232').text('<?php esc_html_e( 'Error de red durante la regeneración.', 'fcb' ); ?>');
 			});
 		});
 	});
@@ -1411,74 +1469,73 @@ function fcb_generate_cover_from_pdf( $pdf_path, $post_id ) {
 }
 
 /**
- * AJAX Handler para regenerar portadas de libros desde sus PDFs.
+ * AJAX Handler para obtener la lista de IDs de libros a procesar.
  */
-function fcb_regenerate_covers_ajax() {
+function fcb_get_book_ids_for_regen_ajax() {
 	check_ajax_referer( 'fcb_regen_covers_nonce', 'nonce' );
 
 	if ( ! current_user_can( 'manage_options' ) ) {
 		wp_send_json_error( __( 'Permisos insuficientes.', 'fcb' ) );
 	}
 
-	// Aumentar tiempo de ejecución y límite de memoria
-	@set_time_limit( 300 );
-	@ini_set( 'memory_limit', '256M' );
-
 	$books = get_posts( array(
 		'post_type'      => 'libro',
 		'posts_per_page' => -1,
+		'fields'         => 'ids',
 	) );
 
-	if ( empty( $books ) ) {
-		wp_send_json_success( __( 'No hay libros registrados en la base de datos.', 'fcb' ) );
-	}
-
-	$success_count = 0;
-	$fail_count    = 0;
-	$errors        = array();
-
-	foreach ( $books as $book ) {
-		$pdf_url = get_post_meta( $book->ID, '_fcb_libro_pdf', true );
-		if ( empty( $pdf_url ) ) {
-			continue;
-		}
-
-		$pdf_path = '';
-		if ( strpos( $pdf_url, home_url() ) !== false ) {
-			global $wpdb;
-			$attachment_id = $wpdb->get_var( $wpdb->prepare(
-				"SELECT ID FROM $wpdb->posts WHERE guid = %s AND post_type = 'attachment'",
-				$pdf_url
-			) );
-			if ( $attachment_id ) {
-				$pdf_path = get_attached_file( $attachment_id );
-			}
-		}
-
-		if ( ! empty( $pdf_path ) && file_exists( $pdf_path ) ) {
-			$pdf_cover_id = fcb_generate_cover_from_pdf( $pdf_path, $book->ID );
-			if ( ! is_wp_error( $pdf_cover_id ) ) {
-				set_post_thumbnail( $book->ID, $pdf_cover_id );
-				$local_cover = wp_get_attachment_url( $pdf_cover_id );
-				update_post_meta( $book->ID, '_fcb_libro_cover_url', $local_cover );
-				$success_count++;
-			} else {
-				$fail_count++;
-				$errors[] = sprintf( __( '"%s": %s', 'fcb' ), $book->post_title, $pdf_cover_id->get_error_message() );
-			}
-		} else {
-			$fail_count++;
-			$errors[] = sprintf( __( '"%s": No se encontró el archivo PDF local.', 'fcb' ), $book->post_title );
-		}
-	}
-
-	$message = sprintf( __( 'Proceso completado. Se generaron %d portadas con éxito y %d fallaron.', 'fcb' ), $success_count, $fail_count );
-	if ( ! empty( $errors ) ) {
-		$message .= '<br/><br/><strong>Detalles de fallos:</strong><br/>' . implode( '<br/>', $errors );
-	}
-
-	wp_send_json_success( $message );
+	wp_send_json_success( $books );
 }
-add_action( 'wp_ajax_fcb_regenerate_covers', 'fcb_regenerate_covers_ajax' );
+add_action( 'wp_ajax_fcb_get_book_ids_for_regen', 'fcb_get_book_ids_for_regen_ajax' );
+
+/**
+ * AJAX Handler para procesar la portada de un solo libro.
+ */
+function fcb_regenerate_single_cover_ajax() {
+	check_ajax_referer( 'fcb_regen_covers_nonce', 'nonce' );
+
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_send_json_error( __( 'Permisos insuficientes.', 'fcb' ) );
+	}
+
+	$book_id = isset( $_POST['book_id'] ) ? intval( $_POST['book_id'] ) : 0;
+	if ( ! $book_id ) {
+		wp_send_json_error( __( 'ID de libro no válido.', 'fcb' ) );
+	}
+
+	$title   = get_the_title( $book_id );
+	$pdf_url = get_post_meta( $book_id, '_fcb_libro_pdf', true );
+
+	if ( empty( $pdf_url ) ) {
+		wp_send_json_error( sprintf( __( '"%s": No tiene un PDF asociado.', 'fcb' ), $title ) );
+	}
+
+	$pdf_path = '';
+	if ( strpos( $pdf_url, home_url() ) !== false ) {
+		global $wpdb;
+		$attachment_id = $wpdb->get_var( $wpdb->prepare(
+			"SELECT ID FROM $wpdb->posts WHERE guid = %s AND post_type = 'attachment'",
+			$pdf_url
+		) );
+		if ( $attachment_id ) {
+			$pdf_path = get_attached_file( $attachment_id );
+		}
+	}
+
+	if ( ! empty( $pdf_path ) && file_exists( $pdf_path ) ) {
+		$pdf_cover_id = fcb_generate_cover_from_pdf( $pdf_path, $book_id );
+		if ( ! is_wp_error( $pdf_cover_id ) ) {
+			set_post_thumbnail( $book_id, $pdf_cover_id );
+			$local_cover = wp_get_attachment_url( $pdf_cover_id );
+			update_post_meta( $book_id, '_fcb_libro_cover_url', $local_cover );
+			wp_send_json_success( sprintf( __( '"%s": Portada regenerada con éxito.', 'fcb' ), $title ) );
+		} else {
+			wp_send_json_error( sprintf( __( '"%s": %s', 'fcb' ), $title, $pdf_cover_id->get_error_message() ) );
+		}
+	} else {
+		wp_send_json_error( sprintf( __( '"%s": Archivo PDF local no encontrado en el disco.', 'fcb' ), $title ) );
+	}
+}
+add_action( 'wp_ajax_fcb_regenerate_single_cover', 'fcb_regenerate_single_cover_ajax' );
 
 
