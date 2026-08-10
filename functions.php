@@ -1215,6 +1215,7 @@ function fcb_import_books_from_json_ajax() {
 
 		// Asignar PDF
 		$pdf_url = isset( $book['pdf'] ) ? esc_url_raw( $book['pdf'] ) : '';
+		$local_pdf_path = '';
 		if ( ! empty( $pdf_url ) ) {
 			// Descargar localmente
 			$temp_file = download_url( $pdf_url );
@@ -1227,6 +1228,7 @@ function fcb_import_books_from_json_ajax() {
 				if ( ! is_wp_error( $attachment_id ) ) {
 					$local_pdf = wp_get_attachment_url( $attachment_id );
 					update_post_meta( $post_id, '_fcb_libro_pdf', $local_pdf );
+					$local_pdf_path = get_attached_file( $attachment_id );
 				} else {
 					@unlink( $temp_file );
 					update_post_meta( $post_id, '_fcb_libro_pdf', $pdf_url );
@@ -1243,15 +1245,31 @@ function fcb_import_books_from_json_ajax() {
 		}
 
 		// Asignar Portada (Cover)
-		$cover_url = isset( $book['cover'] ) ? esc_url_raw( $book['cover'] ) : '';
-		if ( ! empty( $cover_url ) ) {
-			$desc_img_id = media_sideload_image( $cover_url, $post_id, null, 'id' );
-			if ( ! is_wp_error( $desc_img_id ) ) {
-				set_post_thumbnail( $post_id, $desc_img_id );
-				$local_cover = wp_get_attachment_url( $desc_img_id );
+		$cover_assigned = false;
+		if ( ! empty( $local_pdf_path ) ) {
+			$pdf_cover_id = fcb_generate_cover_from_pdf( $local_pdf_path, $post_id );
+			if ( ! is_wp_error( $pdf_cover_id ) ) {
+				set_post_thumbnail( $post_id, $pdf_cover_id );
+				$local_cover = wp_get_attachment_url( $pdf_cover_id );
 				update_post_meta( $post_id, '_fcb_libro_cover_url', $local_cover );
+				$cover_assigned = true;
 			} else {
-				update_post_meta( $post_id, '_fcb_libro_cover_url', $cover_url );
+				$errors[] = sprintf( __( 'No se pudo generar portada desde PDF para "%s": %s', 'fcb' ), $title, $pdf_cover_id->get_error_message() );
+			}
+		}
+
+		// Intentar descargar portada desde JSON si no se pudo generar desde el PDF
+		if ( ! $cover_assigned ) {
+			$cover_url = isset( $book['cover'] ) ? esc_url_raw( $book['cover'] ) : '';
+			if ( ! empty( $cover_url ) ) {
+				$desc_img_id = media_sideload_image( $cover_url, $post_id, null, 'id' );
+				if ( ! is_wp_error( $desc_img_id ) ) {
+					set_post_thumbnail( $post_id, $desc_img_id );
+					$local_cover = wp_get_attachment_url( $desc_img_id );
+					update_post_meta( $post_id, '_fcb_libro_cover_url', $local_cover );
+				} else {
+					update_post_meta( $post_id, '_fcb_libro_cover_url', $cover_url );
+				}
 			}
 		}
 
@@ -1287,5 +1305,65 @@ function fcb_import_books_from_json_ajax() {
 	}
 }
 add_action( 'wp_ajax_fcb_import_books_from_json', 'fcb_import_books_from_json_ajax' );
+
+/**
+ * Generar la portada de un libro usando la primera página de su PDF.
+ *
+ * @param string $pdf_path Ruta física al archivo PDF local.
+ * @param int    $post_id  ID del post del libro al que se asociará la portada.
+ * @return int|WP_Error ID del adjunto de la imagen creada o error.
+ */
+function fcb_generate_cover_from_pdf( $pdf_path, $post_id ) {
+	if ( ! file_exists( $pdf_path ) ) {
+		return new WP_Error( 'file_not_found', __( 'El archivo PDF no existe en el disco.', 'fcb' ) );
+	}
+
+	$pdf_filename = basename( $pdf_path );
+	$image_filename = str_ireplace( '.pdf', '-portada.jpg', $pdf_filename );
+	
+	$temp_dir = get_temp_dir();
+	$temp_image_path = $temp_dir . $image_filename;
+
+	$escaped_pdf = escapeshellarg( $pdf_path );
+	$escaped_out = escapeshellarg( $temp_image_path );
+
+	// Intentar ejecutar Ghostscript directamente
+	$cmd = "gs -dNOPAUSE -sDEVICE=jpeg -dFirstPage=1 -dLastPage=1 -sOutputFile={$escaped_out} -r150 {$escaped_pdf} -c quit 2>&1";
+
+	$output = array();
+	$return_val = 0;
+	exec( $cmd, $output, $return_val );
+
+	if ( $return_val !== 0 || ! file_exists( $temp_image_path ) ) {
+		// Intentar usar pdftoppm como alternativa si gs falla
+		$cmd_alt = "pdftoppm -jpeg -f 1 -l 1 -r 150 {$escaped_pdf} " . escapeshellarg( $temp_dir . str_ireplace( '.pdf', '-portada', $pdf_filename ) ) . " 2>&1";
+		exec( $cmd_alt, $output_alt, $return_val_alt );
+		
+		// pdftoppm añade "-1.jpg" o "-01.jpg" al final
+		$generated_alt = $temp_dir . str_ireplace( '.pdf', '-portada-1.jpg', $pdf_filename );
+		if ( ! file_exists( $generated_alt ) ) {
+			$generated_alt = $temp_dir . str_ireplace( '.pdf', '-portada-01.jpg', $pdf_filename );
+		}
+
+		if ( file_exists( $generated_alt ) ) {
+			rename( $generated_alt, $temp_image_path );
+		} else {
+			return new WP_Error( 'gs_error', sprintf( __( 'Error al generar la portada con Ghostscript (%d). Detalle: %s', 'fcb' ), $return_val, implode( "\n", $output ) ) );
+		}
+	}
+
+	require_once( ABSPATH . 'wp-admin/includes/image.php' );
+	require_once( ABSPATH . 'wp-admin/includes/file.php' );
+	require_once( ABSPATH . 'wp-admin/includes/media.php' );
+
+	$file_array = array(
+		'name'     => $image_filename,
+		'tmp_name' => $temp_image_path,
+	);
+
+	$attachment_id = media_handle_sideload( $file_array, $post_id, get_the_title( $post_id ) );
+
+	return $attachment_id;
+}
 
 
