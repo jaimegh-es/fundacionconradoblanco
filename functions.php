@@ -743,6 +743,7 @@ function fcb_serve_files() {
 
 	$file_rel = ltrim( str_replace( '\\', '/', (string) $file_rel ), '/' );
 	$file_rel = preg_replace( '#/+#', '/', $file_rel );
+	$file_rel = rtrim( $file_rel, '/' ); // Eliminar barra final si la URL llega con trailing slash.
 
 	if ( '' === $file_rel || false !== strpos( $file_rel, '..' ) || false !== strpos( $file_rel, "\0" ) ) {
 		status_header( 404 );
