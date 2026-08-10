@@ -104,12 +104,19 @@ get_header();
 										<?php endif; ?>
 										
 										<div class="card-book-actions">
-											<?php if ( $pdf_url ) : ?>
-												<a href="<?php echo esc_url( add_query_arg( array( 'file' => urlencode( $pdf_url ), 'title' => urlencode( get_the_title() ) ), home_url( '/visor-pdf/' ) ) ); ?>" class="btn-book-action btn-book-action--read">
+											<?php if ( $ebook_url ) : ?>
+												<a href="<?php echo esc_url( $ebook_url ); ?>" class="btn-book-action btn-book-action--read" target="_blank">
 													<i data-lucide="book-open"></i> <?php esc_html_e( 'Ver', 'fcb' ); ?>
 												</a>
+											<?php elseif ( $pdf_url ) : ?>
+												<a href="<?php echo esc_url( $pdf_url ); ?>" class="btn-book-action btn-book-action--read" target="_blank">
+													<i data-lucide="book-open"></i> <?php esc_html_e( 'Ver', 'fcb' ); ?>
+												</a>
+											<?php endif; ?>
+
+											<?php if ( $pdf_url ) : ?>
 												<a href="<?php echo esc_url( $pdf_url ); ?>" class="btn-book-action btn-book-action--download" download>
-													<i data-lucide="download"></i> <?php esc_html_e( 'Descargar', 'fcb' ); ?>
+													<i data-lucide="download"></i> <?php esc_html_e( 'PDF', 'fcb' ); ?>
 												</a>
 											<?php endif; ?>
 										</div>
@@ -165,12 +172,19 @@ get_header();
 											</td>
 											<td>
 												<div class="card-book-actions card-book-actions--table text-right">
-													<?php if ( $pdf_url ) : ?>
-														<a href="<?php echo esc_url( add_query_arg( array( 'file' => urlencode( $pdf_url ), 'title' => urlencode( get_the_title() ) ), home_url( '/visor-pdf/' ) ) ); ?>" class="btn-book-action btn-book-action--read">
+													<?php if ( $ebook_url ) : ?>
+														<a href="<?php echo esc_url( $ebook_url ); ?>" class="btn-book-action btn-book-action--read" target="_blank">
 															<i data-lucide="book-open"></i> <?php esc_html_e( 'Ver', 'fcb' ); ?>
 														</a>
+													<?php elseif ( $pdf_url ) : ?>
+														<a href="<?php echo esc_url( $pdf_url ); ?>" class="btn-book-action btn-book-action--read" target="_blank">
+															<i data-lucide="book-open"></i> <?php esc_html_e( 'Ver', 'fcb' ); ?>
+														</a>
+													<?php endif; ?>
+
+													<?php if ( $pdf_url ) : ?>
 														<a href="<?php echo esc_url( $pdf_url ); ?>" class="btn-book-action btn-book-action--download" download>
-															<i data-lucide="download"></i> <?php esc_html_e( 'Descargar', 'fcb' ); ?>
+															<i data-lucide="download"></i> <?php esc_html_e( 'PDF', 'fcb' ); ?>
 														</a>
 													<?php endif; ?>
 												</div>

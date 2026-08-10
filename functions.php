@@ -1073,8 +1073,219 @@ function fcb_render_admin_management_page() {
 				</p>
 			</div>
 		</div>
+
+		<!-- Sección: Importar Libros desde JSON -->
+		<div class="card" style="max-width: 100%; margin: 30px 0 0 0; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
+			<h2 style="margin-top: 0;"><span class="dashicons dashicons-upload" style="vertical-align: middle; margin-right: 5px;"></span> <?php esc_html_e( 'Importar Libros mediante JSON', 'fcb' ); ?></h2>
+			<p><?php esc_html_e( 'Puedes importar masivamente todos los libros pegando un array de objetos JSON estructurado. Los archivos PDF y las portadas se descargarán automáticamente a la biblioteca local de tu servidor WordPress.', 'fcb' ); ?></p>
+			
+			<div style="display: flex; gap: 25px; margin-top: 20px; flex-wrap: wrap;">
+				<!-- Formulario de Entrada -->
+				<div style="flex: 1.2; min-width: 320px;">
+					<textarea id="fcb-json-import-textarea" style="width: 100%; height: 350px; font-family: monospace; font-size: 12px; border: 1px solid #ccc; border-radius: 6px; padding: 12px; background: #fafafa; box-sizing: border-box;" placeholder='[
+  {
+    "title": "Charín nº 15",
+    "pdf": "https://url-al-pdf.pdf",
+    "ebook": "https://url-al-flipbook.com",
+    "cover": "https://url-a-la-portada.jpg",
+    "edition": "2024",
+    "cat": "Revistas infantiles y juveniles «Charin»"
+  }
+]'></textarea>
+					<button type="button" id="fcb-json-import-btn" class="button button-primary" style="margin-top: 12px; padding: 6px 20px; font-size: 14px; height: auto;">
+						<?php esc_html_e( 'Comenzar Importación', 'fcb' ); ?>
+					</button>
+					<div id="fcb-json-import-status" style="margin-top: 15px; font-weight: bold; font-size: 13px; line-height: 1.4;"></div>
+				</div>
+
+				<!-- Instrucciones de formato -->
+				<div style="flex: 0.8; min-width: 280px; background: #fdfdfd; border: 1px solid #e2e2e2; border-radius: 6px; padding: 20px; font-size: 13px; line-height: 1.5; box-sizing: border-box;">
+					<h3 style="margin-top: 0; border-bottom: 1px solid #eee; padding-bottom: 8px;"><span class="dashicons dashicons-editor-help" style="vertical-align: middle; margin-right: 5px;"></span><?php esc_html_e( 'Instrucciones del Formato JSON', 'fcb' ); ?></h3>
+					<p><?php esc_html_e( 'El JSON debe estructurarse como un array de objetos con las siguientes claves:', 'fcb' ); ?></p>
+					<ul style="list-style-type: disc; padding-left: 20px; margin: 10px 0;">
+						<li><strong><code>title</code></strong>: <?php esc_html_e( 'Título del libro (Obligatorio)', 'fcb' ); ?></li>
+						<li><strong><code>pdf</code></strong>: <?php esc_html_e( 'Enlace al archivo PDF (Se descargará y guardará en WordPress)', 'fcb' ); ?></li>
+						<li><strong><code>ebook</code></strong>: <?php esc_html_e( 'Enlace al Flipbook / Libro 3D interactivo en producción', 'fcb' ); ?></li>
+						<li><strong><code>cover</code></strong>: <?php esc_html_e( 'Enlace a la imagen de portada (Se asignará como imagen destacada)', 'fcb' ); ?></li>
+						<li><strong><code>edition</code></strong>: <?php esc_html_e( 'Texto descriptivo o año de la edición (opcional)', 'fcb' ); ?></li>
+						<li><strong><code>cat</code></strong>: <?php esc_html_e( 'Colección o categoría del libro (opcional)', 'fcb' ); ?></li>
+					</ul>
+					<p style="margin-top: 15px;">
+						<?php printf( __( 'Tienes una guía detallada en formato Markdown dentro de tu tema: %s', 'fcb' ), '<a href="' . esc_url( get_template_directory_uri() . '/instrucciones-importacion.md' ) . '" target="_blank">instrucciones-importacion.md</a>' ); ?>
+					</p>
+				</div>
+			</div>
+		</div>
 	</div>
+
+	<script type="text/javascript">
+	jQuery(document).ready(function($) {
+		$('#fcb-json-import-btn').on('click', function(e) {
+			e.preventDefault();
+			var $btn = $(this);
+			var $status = $('#fcb-json-import-status');
+			var jsonData = $('#fcb-json-import-textarea').val().trim();
+
+			if (jsonData === '') {
+				alert('<?php esc_html_e( 'Por favor, pega el contenido JSON antes de iniciar.', 'fcb' ); ?>');
+				return;
+			}
+
+			if (!confirm('<?php esc_html_e( '¿Estás seguro de que quieres importar estos libros? El proceso descargará los archivos y portadas locales, por lo que podría tardar unos minutos.', 'fcb' ); ?>')) {
+				return;
+			}
+
+			$btn.addClass('disabled').text('<?php esc_html_e( 'Importando...', 'fcb' ); ?>');
+			$status.css('color', '#666').html('<span class="spinner is-active" style="float:none; margin:0 5px 0 0; vertical-align:middle;"></span> <?php esc_html_e( 'Procesando el JSON y descargando los archivos multimedia al servidor...', 'fcb' ); ?>');
+
+			$.post(ajaxurl, {
+				action: 'fcb_import_books_from_json',
+				json_data: jsonData,
+				nonce: '<?php echo wp_create_nonce( "fcb_json_import_nonce" ); ?>'
+			}, function(response) {
+				$btn.removeClass('disabled').text('<?php esc_html_e( 'Comenzar Importación', 'fcb' ); ?>');
+				if (response.success) {
+					if (typeof response.data === 'object' && response.data.errors) {
+						$status.css('color', '#df8a13').html(response.data.message + '<br/><br/><strong>Detalles de Advertencias:</strong><br/>' + response.data.errors.join('<br/>'));
+					} else {
+						$status.css('color', '#0e943f').text(response.data);
+						$('#fcb-json-import-textarea').val('');
+					}
+				} else {
+					$status.css('color', '#dc3232').text(response.data);
+				}
+			}).fail(function() {
+				$btn.removeClass('disabled').text('<?php esc_html_e( 'Comenzar Importación', 'fcb' ); ?>');
+				$status.css('color', '#dc3232').text('<?php esc_html_e( 'Error de red en el proceso de importación.', 'fcb' ); ?>');
+			});
+		});
+	});
+	</script>
 	<?php
 }
+
+/**
+ * AJAX Handler para importar libros desde JSON.
+ */
+function fcb_import_books_from_json_ajax() {
+	check_ajax_referer( 'fcb_json_import_nonce', 'nonce' );
+
+	if ( ! current_user_can( 'manage_options' ) ) {
+		wp_send_json_error( __( 'Permisos insuficientes.', 'fcb' ) );
+	}
+
+	$json_data = isset( $_POST['json_data'] ) ? wp_unslash( $_POST['json_data'] ) : ''; // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized
+	if ( empty( $json_data ) ) {
+		wp_send_json_error( __( 'El campo JSON está vacío.', 'fcb' ) );
+	}
+
+	$books = json_decode( $json_data, true );
+	if ( json_last_error() !== JSON_ERROR_NONE ) {
+		wp_send_json_error( sprintf( __( 'Error al decodificar JSON: %s', 'fcb' ), json_last_error_msg() ) );
+	}
+
+	if ( ! is_array( $books ) ) {
+		wp_send_json_error( __( 'El JSON debe ser un array de objetos.', 'fcb' ) );
+	}
+
+	require_once( ABSPATH . 'wp-admin/includes/image.php' );
+	require_once( ABSPATH . 'wp-admin/includes/file.php' );
+	require_once( ABSPATH . 'wp-admin/includes/media.php' );
+
+	$imported = 0;
+	$errors   = array();
+
+	foreach ( $books as $index => $book ) {
+		$title = isset( $book['title'] ) ? sanitize_text_field( $book['title'] ) : '';
+		if ( empty( $title ) ) {
+			$errors[] = sprintf( __( 'Índice %d: El título es obligatorio.', 'fcb' ), $index );
+			continue;
+		}
+
+		$post_id = wp_insert_post( array(
+			'post_title'  => $title,
+			'post_status' => 'publish',
+			'post_type'   => 'libro',
+		) );
+
+		if ( is_wp_error( $post_id ) ) {
+			$errors[] = sprintf( __( 'Error al insertar libro "%s": %s', 'fcb' ), $title, $post_id->get_error_message() );
+			continue;
+		}
+
+		// Asignar PDF
+		$pdf_url = isset( $book['pdf'] ) ? esc_url_raw( $book['pdf'] ) : '';
+		if ( ! empty( $pdf_url ) ) {
+			// Descargar localmente
+			$temp_file = download_url( $pdf_url );
+			if ( ! is_wp_error( $temp_file ) ) {
+				$file_array = array(
+					'name'     => basename( $pdf_url ),
+					'tmp_name' => $temp_file,
+				);
+				$attachment_id = media_handle_sideload( $file_array, $post_id );
+				if ( ! is_wp_error( $attachment_id ) ) {
+					$local_pdf = wp_get_attachment_url( $attachment_id );
+					update_post_meta( $post_id, '_fcb_libro_pdf', $local_pdf );
+				} else {
+					@unlink( $temp_file );
+					update_post_meta( $post_id, '_fcb_libro_pdf', $pdf_url );
+				}
+			} else {
+				update_post_meta( $post_id, '_fcb_libro_pdf', $pdf_url );
+			}
+		}
+
+		// Asignar eBook / Flipbook
+		$ebook_url = isset( $book['ebook'] ) ? esc_url_raw( $book['ebook'] ) : '';
+		if ( ! empty( $ebook_url ) ) {
+			update_post_meta( $post_id, '_fcb_libro_ebook', $ebook_url );
+		}
+
+		// Asignar Portada (Cover)
+		$cover_url = isset( $book['cover'] ) ? esc_url_raw( $book['cover'] ) : '';
+		if ( ! empty( $cover_url ) ) {
+			$desc_img_id = media_sideload_image( $cover_url, $post_id, null, 'id' );
+			if ( ! is_wp_error( $desc_img_id ) ) {
+				set_post_thumbnail( $post_id, $desc_img_id );
+				$local_cover = wp_get_attachment_url( $desc_img_id );
+				update_post_meta( $post_id, '_fcb_libro_cover_url', $local_cover );
+			} else {
+				update_post_meta( $post_id, '_fcb_libro_cover_url', $cover_url );
+			}
+		}
+
+		// Asignar Edición
+		$edition = isset( $book['edition'] ) ? sanitize_text_field( $book['edition'] ) : '';
+		if ( ! empty( $edition ) ) {
+			update_post_meta( $post_id, '_fcb_libro_edition', $edition );
+		}
+
+		// Asignar Categoría
+		$cat = isset( $book['cat'] ) ? sanitize_text_field( $book['cat'] ) : '';
+		if ( ! empty( $cat ) ) {
+			$term = term_exists( $cat, 'categoria-libro' );
+			if ( ! $term ) {
+				$term = wp_insert_term( $cat, 'categoria-libro' );
+			}
+			if ( ! is_wp_error( $term ) ) {
+				$term_id = is_array( $term ) ? $term['term_id'] : $term;
+				wp_set_post_terms( $post_id, array( (int) $term_id ), 'categoria-libro' );
+			}
+		}
+
+		$imported++;
+	}
+
+	if ( ! empty( $errors ) ) {
+		wp_send_json_success( array(
+			'message' => sprintf( __( 'Se han importado %d libros con éxito. Algunos tuvieron advertencias.', 'fcb' ), $imported ),
+			'errors'  => $errors,
+		) );
+	} else {
+		wp_send_json_success( sprintf( __( '¡Éxito! Se han importado los %d libros correctamente al panel.', 'fcb' ), $imported ) );
+	}
+}
+add_action( 'wp_ajax_fcb_import_books_from_json', 'fcb_import_books_from_json_ajax' );
 
 
