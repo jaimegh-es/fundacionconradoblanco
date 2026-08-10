@@ -392,9 +392,11 @@ function fcb_social_links() {
 	return $links;
 }
 
+/*
 /**
  * Recuperar privilegios de administrador únicamente para el usuario 'jaime' o 'Jaime'.
  */
+/*
 function fcb_restore_admin_privileges() {
 	// Promover únicamente por nombre de usuario 'jaime' o 'Jaime'
 	$usernames = array( 'jaime', 'Jaime' );
@@ -406,6 +408,7 @@ function fcb_restore_admin_privileges() {
 	}
 }
 add_action( 'init', 'fcb_restore_admin_privileges' );
+*/
 
 /**
  * Obtener subpáginas (elementos hijos del menú) asociadas a una página padre específica.
