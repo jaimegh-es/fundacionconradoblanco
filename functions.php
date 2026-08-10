@@ -269,32 +269,72 @@ function fcb_hero_video_url() {
  * Convocatorias: páginas específicas de los premios Conrado y Charo.
  */
 function fcb_get_convocatorias() {
+	$locations = get_nav_menu_locations();
+	$menu_id   = isset( $locations['primary'] ) ? (int) $locations['primary'] : 0;
+	$post_ids  = array();
+
+	if ( $menu_id ) {
+		$menu_items = wp_get_nav_menu_items( $menu_id );
+		if ( ! empty( $menu_items ) ) {
+			// Encontrar el elemento de menú padre "Convocatorias" o "Concursos"
+			$parent_id = 0;
+			foreach ( $menu_items as $item ) {
+				if ( strcasecmp( $item->title, 'Convocatorias' ) === 0 || strcasecmp( $item->title, 'Concursos' ) === 0 ) {
+					$parent_id = $item->ID;
+					break;
+				}
+			}
+
+			if ( $parent_id ) {
+				// Buscar elementos hijos en el menú que apunten a posts o páginas
+				foreach ( $menu_items as $item ) {
+					if ( (int) $item->menu_item_parent === $parent_id && 'post_type' === $item->type ) {
+						$post_ids[] = (int) $item->object_id;
+					}
+				}
+			}
+		}
+	}
+
+	// Fallback a los slugs conocidos si la detección por menú no encuentra nada
+	if ( empty( $post_ids ) ) {
+		return new WP_Query(
+			array(
+				'post_type'      => array( 'post', 'page' ),
+				'post_status'    => 'publish',
+				'post_name__in'  => array(
+					'premio-nacional-de-poesia-conrado-blanco-leon',
+					'premio-nacional-de-poesia-infantil-charo-gonzalez',
+				),
+				'orderby'        => 'post_name__in',
+				'posts_per_page' => 2,
+				'no_found_rows'  => true,
+			)
+		);
+	}
+
 	return new WP_Query(
 		array(
-			'post_type'      => 'any',
+			'post_type'      => array( 'post', 'page' ),
 			'post_status'    => 'publish',
-			'post_name__in'  => array(
-				'premio-nacional-de-poesia-conrado-blanco-leon',
-				'premio-nacional-de-poesia-infantil-charo-gonzalez',
-			),
-			'orderby'        => 'post_name__in',
+			'post__in'       => $post_ids,
+			'orderby'        => 'post__in',
 			'posts_per_page' => 2,
 			'no_found_rows'  => true,
 		)
 	);
 }
 
-/**
- * Noticias recientes.
- */
 function fcb_get_noticias() {
-	return new WP_Query(
-		array(
-			'category_name'    => 'noticias',
-			'posts_per_page'   => absint( get_theme_mod( 'fcb_noticias_count', 6 ) ),
-			'no_found_rows'    => true,
-		)
+	$exclude_cat = get_category_by_slug( 'convocatorias' );
+	$args = array(
+		'posts_per_page'   => absint( get_theme_mod( 'fcb_noticias_count', 6 ) ),
+		'no_found_rows'    => true,
 	);
+	if ( $exclude_cat ) {
+		$args['category__not_in'] = array( $exclude_cat->term_id );
+	}
+	return new WP_Query( $args );
 }
 
 /**

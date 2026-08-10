@@ -100,7 +100,7 @@ endif;
 					<p class="section-kicker"><?php esc_html_e( 'Actualidad', 'fcb' ); ?></p>
 					<h2 class="section-title"><?php echo esc_html( get_theme_mod( 'fcb_section_noticias', 'Noticias' ) ); ?></h2>
 				</div>
-				<a class="text-link" href="<?php echo esc_url( home_url( '/category/noticias/' ) ); ?>"><?php esc_html_e( 'Ver todas', 'fcb' ); ?> →</a>
+				<a class="text-link" href="<?php echo esc_url( home_url( '/noticias/' ) ); ?>"><?php esc_html_e( 'Ver todas', 'fcb' ); ?> →</a>
 			</header>
 
 			<div class="cards-grid cards-grid--3">
@@ -176,6 +176,8 @@ endif;
 			'post_type'      => 'libro',
 			'posts_per_page' => 4,
 			'post_status'    => 'publish',
+			'orderby'        => 'date',
+			'order'          => 'DESC',
 		) );
 
 		if ( $libros_query->have_posts() ) :
@@ -266,12 +268,14 @@ endif;
 				</div>
 			</div>
 			
-			<div class="comunidad-column facebook-column">
-				<h3 class="comunidad-subtitle">
-					<svg viewBox="0 0 24 24" width="24" height="24" fill="var(--fcb-green)" style="display:inline-block; vertical-align:middle; margin-right:8px;"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
-					Publicaciones de Facebook
-				</h3>
-				<div class="facebook-feed-container">
+			<div class="facebook-wrapper-column">
+				<div class="comunidad-column facebook-title-column" style="padding: 20px 30px;">
+					<h3 class="comunidad-subtitle" style="margin: 0;">
+						<svg viewBox="0 0 24 24" width="24" height="24" fill="var(--fcb-green)" style="display:inline-block; vertical-align:middle; margin-right:8px;"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+						Publicaciones de Facebook
+					</h3>
+				</div>
+				<div class="facebook-feed-container" style="margin-top: 20px;">
 					<iframe src="https://www.facebook.com/plugins/page.php?href=https%3A%2F%2Fwww.facebook.com%2Ffundacionconradoblanco%2F&tabs=timeline&width=500&height=500&small_header=true&adapt_container_width=true&hide_cover=false&show_facepile=true" width="100%" height="500" style="border:none;overflow:hidden;border-radius:14px;" scrolling="no" frameborder="0" allowfullscreen="true" allow="autoplay; clipboard-write; encrypted-media; picture-in-picture; web-share"></iframe>
 				</div>
 			</div>
