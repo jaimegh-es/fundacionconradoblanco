@@ -1426,32 +1426,68 @@ function fcb_generate_cover_from_pdf( $pdf_path, $post_id ) {
 	$temp_dir = get_temp_dir();
 	$temp_image_path = $temp_dir . $image_filename;
 
-	$escaped_pdf = escapeshellarg( $pdf_path );
-	$escaped_out = escapeshellarg( $temp_image_path );
+	$cover_created = false;
 
-	// Intentar ejecutar Ghostscript directamente
-	$cmd = "gs -dNOPAUSE -sDEVICE=jpeg -dFirstPage=1 -dLastPage=1 -sOutputFile={$escaped_out} -r150 {$escaped_pdf} -c quit 2>&1";
-
-	$output = array();
-	$return_val = 0;
-	exec( $cmd, $output, $return_val );
-
-	if ( $return_val !== 0 || ! file_exists( $temp_image_path ) ) {
-		// Intentar usar pdftoppm como alternativa si gs falla
-		$cmd_alt = "pdftoppm -jpeg -f 1 -l 1 -r 150 {$escaped_pdf} " . escapeshellarg( $temp_dir . str_ireplace( '.pdf', '-portada', $pdf_filename ) ) . " 2>&1";
-		exec( $cmd_alt, $output_alt, $return_val_alt );
-		
-		// pdftoppm añade "-1.jpg" o "-01.jpg" al final
-		$generated_alt = $temp_dir . str_ireplace( '.pdf', '-portada-1.jpg', $pdf_filename );
-		if ( ! file_exists( $generated_alt ) ) {
-			$generated_alt = $temp_dir . str_ireplace( '.pdf', '-portada-01.jpg', $pdf_filename );
+	// Método 1: Intentar con Imagick si está disponible y cargado
+	if ( class_exists( 'Imagick' ) ) {
+		try {
+			$imagick = new Imagick();
+			$imagick->setResolution( 150, 150 );
+			// [0] indica la primera página del PDF
+			$imagick->readImage( $pdf_path . '[0]' );
+			
+			$imagick->setImageFormat( 'jpeg' );
+			$imagick->setImageCompression( Imagick::COMPRESSION_JPEG );
+			$imagick->setImageCompressionQuality( 85 );
+			
+			$imagick->writeImage( $temp_image_path );
+			$imagick->clear();
+			$imagick->destroy();
+			
+			if ( file_exists( $temp_image_path ) ) {
+				$cover_created = true;
+			}
+		} catch ( Exception $e ) {
+			// Imagick falló (ej: políticas restrictivas del servidor), continuaremos con Ghostscript
 		}
+	}
 
-		if ( file_exists( $generated_alt ) ) {
-			rename( $generated_alt, $temp_image_path );
+	// Método 2: Intentar con Ghostscript / pdftoppm si exec() está habilitado y permitido
+	if ( ! $cover_created && fcb_is_exec_enabled() ) {
+		$escaped_pdf = escapeshellarg( $pdf_path );
+		$escaped_out = escapeshellarg( $temp_image_path );
+
+		// Intentar ejecutar Ghostscript directamente
+		$cmd = "gs -dNOPAUSE -sDEVICE=jpeg -dFirstPage=1 -dLastPage=1 -sOutputFile={$escaped_out} -r150 {$escaped_pdf} -c quit 2>&1";
+		$output = array();
+		$return_val = 0;
+		exec( $cmd, $output, $return_val );
+
+		if ( $return_val === 0 && file_exists( $temp_image_path ) ) {
+			$cover_created = true;
 		} else {
-			return new WP_Error( 'gs_error', sprintf( __( 'Error al generar la portada con Ghostscript (%d). Detalle: %s', 'fcb' ), $return_val, implode( "\n", $output ) ) );
+			// Intentar usar pdftoppm como alternativa si gs falla
+			$cmd_alt = "pdftoppm -jpeg -f 1 -l 1 -r 150 {$escaped_pdf} " . escapeshellarg( $temp_dir . str_ireplace( '.pdf', '-portada', $pdf_filename ) ) . " 2>&1";
+			exec( $cmd_alt, $output_alt, $return_val_alt );
+			
+			// pdftoppm añade "-1.jpg" o "-01.jpg" al final
+			$generated_alt = $temp_dir . str_ireplace( '.pdf', '-portada-1.jpg', $pdf_filename );
+			if ( ! file_exists( $generated_alt ) ) {
+				$generated_alt = $temp_dir . str_ireplace( '.pdf', '-portada-01.jpg', $pdf_filename );
+			}
+
+			if ( file_exists( $generated_alt ) ) {
+				rename( $generated_alt, $temp_image_path );
+				$cover_created = true;
+			}
 		}
+	}
+
+	if ( ! $cover_created ) {
+		return new WP_Error(
+			'no_extraction_method',
+			__( 'No se puede extraer la portada del PDF: Imagick no está disponible y la función PHP "exec" está desactivada en este servidor.', 'fcb' )
+		);
 	}
 
 	require_once( ABSPATH . 'wp-admin/includes/image.php' );
@@ -1466,6 +1502,23 @@ function fcb_generate_cover_from_pdf( $pdf_path, $post_id ) {
 	$attachment_id = media_handle_sideload( $file_array, $post_id, get_the_title( $post_id ) );
 
 	return $attachment_id;
+}
+
+/**
+ * Comprobar si la función exec() está disponible y habilitada en php.ini.
+ */
+function fcb_is_exec_enabled() {
+	if ( ! function_exists( 'exec' ) ) {
+		return false;
+	}
+	$disabled = ini_get( 'disable_functions' );
+	if ( ! empty( $disabled ) ) {
+		$disabled_array = array_map( 'trim', explode( ',', $disabled ) );
+		if ( in_array( 'exec', $disabled_array, true ) ) {
+			return false;
+		}
+	}
+	return true;
 }
 
 /**
