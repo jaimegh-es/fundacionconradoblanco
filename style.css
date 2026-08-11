@@ -35,6 +35,8 @@ html { scroll-behavior: smooth; }
 
 body {
   margin: 0;
+  min-height: 100vh;
+  min-height: 100dvh;
   font-family: var(--fcb-font);
   font-size: 17px;
   line-height: 1.65;
@@ -82,6 +84,9 @@ svg { display: block; }
 
 /* En páginas sin hero, la cabecera siempre es sólida */
 body:not(.home) .site-content { padding-top: var(--fcb-header-h); }
+
+/* El blog-list ocupa todo el alto disponible y llega hasta el footer */
+body:not(.home) .site-content { display: flex; flex-direction: column; }
 
 .site-header__inner { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding-top: 10px; padding-bottom: 10px; }
 
@@ -560,7 +565,7 @@ html.js .section .comunidad-grid {
 .card--page .card-body { gap: 8px; min-height: 180px; justify-content: space-between; }
 
 /* ---------- Entradas (single / archive / blog) ---------- */
-.blog-list { background: #fff; padding: 56px 24px 80px; }
+.blog-list { background: #fff; padding: 56px 24px 80px; flex: 1 0 auto; }
 
 .entry {
   background: transparent;
