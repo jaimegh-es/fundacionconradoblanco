@@ -658,11 +658,13 @@ add_filter( 'query_vars', 'fcb_pdf_viewer_query_vars' );
  */
 function fcb_files_rewrite_rule() {
 	add_rewrite_rule( '^files/(.+)$', 'index.php?fcb_file=$1', 'top' );
+	add_rewrite_rule( '^wp-content/uploads/(.+)$', 'index.php?fcb_file=$1&fcb_uploads_redirect=1', 'top' );
 }
 add_action( 'init', 'fcb_files_rewrite_rule' );
 
 function fcb_files_query_vars( $vars ) {
 	$vars[] = 'fcb_file';
+	$vars[] = 'fcb_uploads_redirect';
 	return $vars;
 }
 add_filter( 'query_vars', 'fcb_files_query_vars' );
@@ -750,6 +752,12 @@ function fcb_serve_files() {
 		exit;
 	}
 
+	if ( '1' === get_query_var( 'fcb_uploads_redirect' ) ) {
+		$segments = array_map( 'rawurlencode', explode( '/', $file_rel ) );
+		wp_safe_redirect( home_url( '/files/' . implode( '/', $segments ) ), 301 );
+		exit;
+	}
+
 	$uploads      = wp_upload_dir();
 	$basedir_real = realpath( $uploads['basedir'] );
 	$file         = realpath( $uploads['basedir'] . '/' . $file_rel );
@@ -806,7 +814,9 @@ function fcb_serve_files() {
 	}
 	exit;
 }
-add_action( 'template_redirect', 'fcb_serve_files' );
+// Prioridad 1: sirve antes de redirect_canonical (prio 10), que en producción
+// añadía la barra final (301) a /files/ y rompía el servido.
+add_action( 'template_redirect', 'fcb_serve_files', 1 );
 
 /**
  * Redirige (301) las URLs antiguas de wp-content/uploads → /files/ a nivel de
@@ -826,7 +836,7 @@ function fcb_redirect_uploads_to_files() {
 		exit;
 	}
 }
-add_action( 'template_redirect', 'fcb_redirect_uploads_to_files' );
+add_action( 'template_redirect', 'fcb_redirect_uploads_to_files', 1 );
 
 /**
  * Limpia el bloque "FCB files" que versiones anteriores escribieron en el
