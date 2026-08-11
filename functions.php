@@ -653,72 +653,36 @@ function fcb_pdf_viewer_query_vars( $vars ) {
 add_filter( 'query_vars', 'fcb_pdf_viewer_query_vars' );
 
 /**
- * Rutas /files/: sirven archivos desde wp-content/uploads y reescriben las
- * URLs públicas de uploads a /files/ para que queden más limpias.
+ * Regla de reescritura de respaldo para /files/ (solo alcanza WP si el
+ * .htaccess lo permite; el hosting lo regenera, así que no es fiable). Las URLs
+ * públicas usan wp-content/uploads, que sí se sirven de forma estática.
  */
 function fcb_files_rewrite_rule() {
 	add_rewrite_rule( '^files/(.+)$', 'index.php?fcb_file=$1', 'top' );
-	add_rewrite_rule( '^wp-content/uploads/(.+)$', 'index.php?fcb_file=$1&fcb_uploads_redirect=1', 'top' );
 }
 add_action( 'init', 'fcb_files_rewrite_rule' );
 
 function fcb_files_query_vars( $vars ) {
 	$vars[] = 'fcb_file';
-	$vars[] = 'fcb_uploads_redirect';
 	return $vars;
 }
 add_filter( 'query_vars', 'fcb_files_query_vars' );
 
 /**
- * Convierte una URL de wp-content/uploads en su equivalente /files/.
+ * Las URLs de archivos usan siempre wp-content/uploads (se sirven de forma
+ * estática y cacheable). Se mantiene la función como no-op para no romper
+ * filtros previos de wp_get_attachment_url.
  */
 function fcb_files_url( $url ) {
-	if ( ! is_string( $url ) || '' === $url ) {
-		return $url;
-	}
-	$uploads     = wp_upload_dir();
-	$uploads_url = trailingslashit( $uploads['baseurl'] );
-	if ( 0 === strpos( $url, $uploads_url ) ) {
-		return home_url( '/files/' . ltrim( substr( $url, strlen( $uploads_url ) ), '/' ) );
-	}
 	return $url;
 }
 
 /**
- * Reescritura de las URLs de los meta de libros en el front-end.
+ * No reescribe las URLs de los meta de libros: se devuelven tal cual desde la
+ * BD (wp-content/uploads), que es la ruta que funciona de forma estática.
  */
 function fcb_files_rewrite_metadata( $check, $object_id, $meta_key, $single ) {
-	if ( ! is_string( $meta_key ) || ! in_array( $meta_key, array( '_fcb_libro_pdf', '_fcb_libro_ebook', '_fcb_libro_cover_url' ), true ) ) {
-		return $check;
-	}
-
-	static $guard = false;
-	if ( $guard ) {
-		return $check;
-	}
-
-	$guard = true;
-	$all   = get_metadata( 'post', $object_id, '', false );
-	$guard = false;
-
-	if ( empty( $all ) ) {
-		return $check;
-	}
-
-	foreach ( $all as $key => &$values ) {
-		if ( in_array( $key, array( '_fcb_libro_pdf', '_fcb_libro_ebook', '_fcb_libro_cover_url' ), true ) ) {
-			$values = array_map( 'fcb_files_url', (array) $values );
-		}
-	}
-	unset( $values );
-
-	wp_cache_set( $object_id, $all, 'post_meta' );
-
-	if ( $single ) {
-		return isset( $all[ $meta_key ] ) ? maybe_unserialize( reset( $all[ $meta_key ] ) ) : '';
-	}
-
-	return isset( $all[ $meta_key ] ) ? array_map( 'maybe_unserialize', $all[ $meta_key ] ) : array();
+	return $check;
 }
 
 if ( ! is_admin() ) {
@@ -749,12 +713,6 @@ function fcb_serve_files() {
 
 	if ( '' === $file_rel || false !== strpos( $file_rel, '..' ) || false !== strpos( $file_rel, "\0" ) ) {
 		status_header( 404 );
-		exit;
-	}
-
-	if ( '1' === get_query_var( 'fcb_uploads_redirect' ) ) {
-		$segments = array_map( 'rawurlencode', explode( '/', $file_rel ) );
-		wp_safe_redirect( home_url( '/files/' . implode( '/', $segments ) ), 301 );
 		exit;
 	}
 
@@ -819,22 +777,11 @@ function fcb_serve_files() {
 add_action( 'template_redirect', 'fcb_serve_files', 1 );
 
 /**
- * Redirige (301) las URLs antiguas de wp-content/uploads → /files/ a nivel de
- * WordPress. El hosting regenera el .htaccess, por lo que la regla de servidor
- * no es fiable; el redirect en PHP cubre las peticiones que llegan a WP.
+ * Desactivado: ya no se redirige wp-content/uploads → /files/. Las URLs de
+ * uploads se sirven de forma estática y cacheable, que es lo que funciona.
  */
 function fcb_redirect_uploads_to_files() {
-	if ( ! empty( $GLOBALS['fcb_file'] ) ) {
-		return;
-	}
-
-	$uri = isset( $_SERVER['REQUEST_URI'] ) ? wp_unslash( $_SERVER['REQUEST_URI'] ) : '';
-	$uri = preg_replace( '/\?.*$/', '', (string) $uri );
-
-	if ( preg_match( '#^/wp-content/uploads/(.+)$#', $uri, $m ) ) {
-		wp_safe_redirect( home_url( '/files/' . $m[1] ), 301 );
-		exit;
-	}
+	return;
 }
 add_action( 'template_redirect', 'fcb_redirect_uploads_to_files', 1 );
 
