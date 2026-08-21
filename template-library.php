@@ -29,13 +29,13 @@ get_header();
 				'hide_empty' => true,
 			) );
 
-			// Obtener todos los libros
+			// Obtener todos los libros ordenados de más nuevo a más antiguo
 			$books_query = new WP_Query( array(
 				'post_type'      => 'libro',
 				'posts_per_page' => -1,
 				'post_status'    => 'publish',
-				'orderby'        => 'title',
-				'order'          => 'ASC',
+				'orderby'        => 'date',
+				'order'          => 'DESC',
 			) );
 
 			if ( $books_query->have_posts() ) :

@@ -102,7 +102,10 @@ body:not(.home) .site-content { display: flex; flex-direction: column; }
 .main-navigation { display: flex; align-items: center; }
 .main-navigation ul { list-style: none; margin: 0; padding: 0; display: flex; align-items: center; gap: 2px; }
 .main-navigation a {
-  display: block; padding: 10px 14px; font-weight: 600; font-size: 0.98rem;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  padding: 10px 14px; font-weight: 600; font-size: 0.98rem;
   color: #fff;
   border-bottom: 2px solid transparent;
   transition: color .15s ease, border-color .15s ease;
@@ -120,6 +123,7 @@ body:not(.home) .site-content { display: flex; flex-direction: column; }
   width: 14px;
   height: 14px;
   margin-left: 5px;
+  flex-shrink: 0;
   color: rgba(255, 255, 255, 0.75);
   transition: transform 0.25s ease, color 0.25s ease;
   display: inline-block;
@@ -723,6 +727,9 @@ html.js .section .comunidad-grid {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 8px;
 }
 .youtube-video-card {
   border-bottom: 1px solid var(--fcb-border);

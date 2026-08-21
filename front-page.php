@@ -304,7 +304,7 @@ document.addEventListener("DOMContentLoaded", function() {
 				throw new Error("Formato inválido");
 			}
 			ytFeed.innerHTML = "";
-			const items = data.items.slice(0, 3);
+			const items = data.items.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
 			items.forEach(item => {
 				const card = document.createElement("div");
 				card.className = "youtube-video-card";
