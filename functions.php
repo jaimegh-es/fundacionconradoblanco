@@ -2457,3 +2457,169 @@ function fcb_order_libros_by_edition( $query ) {
 	}
 }
 add_action( 'pre_get_posts', 'fcb_order_libros_by_edition' );
+
+
+/**
+ * Auto-sincronizacion y limpieza automatica de duplicados segun la tabla de Publicaciones.
+ * Se ejecuta de forma automatica para ordenar todos los libros cronologicamente y limpiar duplicados.
+ */
+function fcb_auto_sync_and_deduplicate_libros() {
+	$version_key = "fcb_libros_sync_v3";
+	if ( get_option( $version_key ) ) {
+		return;
+	}
+
+	$publicaciones_data = array(
+    array('title' => 'Antología 15 – Charin de Corazón Ilusionado', 'edition' => '2024', 'date' => '2024-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/antologia-15-charin-de-corazon-ilusionado/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2024/08/CHARIN-15-2024-de-corazon-ilusionado-B.pdf'),
+    array('title' => 'Revista 14 – Charin Literaria', 'edition' => '2023', 'date' => '2023-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/revista-14-charin-literaria/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2023/09/charin-14-2023-REVISTA.pdf'),
+    array('title' => 'Antología 14 – Charin de Corazón Alegre', 'edition' => '2023', 'date' => '2023-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/antologia-14-charin-de-corazon-alegre/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2023/06/charin-14-2023-de-corazon-alegre.pdf'),
+    array('title' => 'Actas – Curso de Verano – «Antonio Colinas de la Poesia a la Narrativa y al Ensayo»', 'edition' => '2023', 'date' => '2023-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/antonio-colinas-de-la-poesia-a-la-narrativa-y-al-ensayo/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2023/06/actas-curso-2022-colinas.pdf'),
+    array('title' => 'Actas I Congreso Internacional del Carnaval', 'edition' => '2022', 'date' => '2022-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/actas-i-congreso-internacional-de-carnaval/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2023/05/I-ActasCongresoCarnaval2021Libro.pdf'),
+    array('title' => 'Revista 13 – Charin Literaria', 'edition' => '2022', 'date' => '2022-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/revista-13-charin-literaria/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2022/11/charin-13-2021-REVISTA.pdf'),
+    array('title' => 'Actas II Curso de Verano A. Colinas', 'edition' => '2022', 'date' => '2022-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Las Parroquias de San Martín y Santa Maria de la Isla – Modesto Santos', 'edition' => '2022', 'date' => '2022-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/las-parroquias-de-san-martin-y-santa-maria-de-la-isla-fuentes-documentales/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2022/10/Santa-Maria-de-la-Isla-LIBRO.pdf'),
+    array('title' => 'Antología 13 – Charin de Corazón Generoso', 'edition' => '2022', 'date' => '2022-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/charin-de-corazon-generoso-n13/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2022/11/Charin13-Corazon-Generoso.pdf'),
+    array('title' => 'Biografía Conrado', 'edition' => '2021', 'date' => '2021-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Reedición Conradosías', 'edition' => '2021', 'date' => '2021-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Revista 12 – Charin Literaria', 'edition' => '2021', 'date' => '2021-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/?post_type=3d-flip-book&amp;p=827&amp;preview=true', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2022/11/CHARIN-12-2021-REVISTA-1.pdf'),
+    array('title' => 'Actas I Curso de Verano de A. Colinas', 'edition' => '2021', 'date' => '2021-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Antología 12 – Charin Solidaria', 'edition' => '2021', 'date' => '2021-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/antologia-12-charin-solidaria/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2022/10/charin-solidaria.-Antologia-12.pdf'),
+    array('title' => 'Capiteles XI Juan de Ferreras', 'edition' => '2021', 'date' => '2021-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/capiteles-para-la-historia-banezana-11/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-XI-LIBRO-b.pdf'),
+    array('title' => 'El Albergue-Escuelas de La Bañeza', 'edition' => '2ª', 'date' => '2020-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'El maestro Odón Alonso Ordás en el recuerdo – F. Pérez Ruano', 'edition' => '2020', 'date' => '2020-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Revista Charin 11', 'edition' => '2019', 'date' => '2019-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/charin-11/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2021/04/charin-11-2019.pdf'),
+    array('title' => 'Más allá de la estética – Ramiro Guardia E', 'edition' => '2019', 'date' => '2019-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/mas-alla-de-la-estetica-reflexiones-sobre-la-poesia-de-antonio-colinas/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2022/10/mas-alla-de-la-estetica-LIBRO-w.pdf'),
+    array('title' => 'El Albergue-Escuelas de La Bañeza', 'edition' => '2019', 'date' => '2019-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Antología Corazón de Hojalata', 'edition' => '2019', 'date' => '2019-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/corazon-de-hojalata/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2020/07/11-Corazon-de-hojalata.pdf'),
+    array('title' => 'El maestro Odón Alonso Ordaz y la música de su tiempo – F. Pérez Ruano', 'edition' => '2019', 'date' => '2019-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Diccionario de los Cronistas oficiales de España', 'edition' => '2018', 'date' => '2018-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Librillo de Restauraciones', 'edition' => '2018', 'date' => '2018-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Libro folleto San Roque', 'edition' => '2018', 'date' => '2018-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Revista Charin 10', 'edition' => '2018', 'date' => '2018-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/charin-10/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2020/07/charin-10-2018.pdf'),
+    array('title' => 'Villamontán, Quintana y Congosto – Marín Turrado Vidal', 'edition' => '2018', 'date' => '2018-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Antología Corazón de Corazones', 'edition' => '2018', 'date' => '2018-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/corazon-de-corazones/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2020/07/10-Corazon-de-corazones.pdf'),
+    array('title' => 'Convento de Carmelitas Descalzos – J. Dionisio Colinas', 'edition' => '2017', 'date' => '2017-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Tradiciones Orales 2 – José Luis Puerto', 'edition' => '2017', 'date' => '2017-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Revista Charin 9', 'edition' => '2017', 'date' => '2017-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/charin-9/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2020/07/charin-09-2017.pdf'),
+    array('title' => 'Antología Corazón de Canela', 'edition' => '2017', 'date' => '2017-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/corazon-de-canela/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2020/07/9-Corazon-de-canela.pdf'),
+    array('title' => 'Tradiciones Orales 1 – José Luis Puerto', 'edition' => '2016', 'date' => '2016-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Revista Charin 8', 'edition' => '2016', 'date' => '2016-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/charin-8/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2021/04/charin-08-2016.pdf'),
+    array('title' => 'Antología Corazón de Plata', 'edition' => '2016', 'date' => '2016-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/corazon-de-plata/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2020/07/8-Corazon-de-plata.pdf'),
+    array('title' => 'Monte Urba. Una ilusión de Conrado, Arturo y Paco Cabo', 'edition' => '2015', 'date' => '2015-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'La Santa Regla- Angustias y Soledad Luis Mantecon', 'edition' => '2015', 'date' => '2015-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Conrado Corazón y Mezenazgo', 'edition' => '&#8211;', 'date' => '2015-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'La Virgen del Castro', 'edition' => '&#8211;', 'date' => '2015-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Premio Conrado Blanco León, 25 años de poesía', 'edition' => '&#8211;', 'date' => '2014-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Palacios de la Valduerna. Palacio, Tenencia y Señorío', 'edition' => '&#8211;', 'date' => '2014-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Napoleón en La Bañeza', 'edition' => '&#8211;', 'date' => '2013-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Atrapar lo Efímero', 'edition' => '&#8211;', 'date' => '2013-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Melindres Poéticos y Literarios', 'edition' => '5ª&nbsp;Edit. Monte riego', 'date' => '2012-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Capiteles para la Historia Bañezana VII', 'edition' => '2ª&nbsp;Edit. Monte riego', 'date' => '2012-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/capiteles-para-la-historia-banezana-7', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-7-ed2.pdf'),
+    array('title' => 'Revista Charin 4 ', 'edition' => '1ª&nbsp;Edit. Monte riego', 'date' => '2012-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/revista-charin-4/', 'pdf' => 'https://alt.fundacionconradoblanco.com/publicaciones/pdf/Revista-Charin-4.pdf'),
+    array('title' => 'Capiteles para la Historia Bañezana X', 'edition' => '1ª&nbsp;Edit. Monte riego', 'date' => '2012-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/capiteles-para-la-historia-banezana-10/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-X.pdf'),
+    array('title' => 'El Pescador de Estrellas', 'edition' => '1ª&nbsp;Edit. Monte riego', 'date' => '2012-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/el-pescador-de-estrellas/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2021/04/el-pescador-de-estrellas-LIBRO.pdf'),
+    array('title' => 'Corazón de Estrella', 'edition' => '1ª&nbsp;Edit. Monte riego', 'date' => '2012-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/corazon-de-estrella/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2020/07/4-corazon-de-estrella-2a-ed.pdf'),
+    array('title' => 'Capiteles para la Historia Bañezana VIII', 'edition' => '3ª&nbsp;Edit. Monte riego', 'date' => '2012-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/capiteles-para-la-historia-banezana-8', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-8-ed2.pdf'),
+    array('title' => 'Capiteles para la Historia Bañezana VI', 'edition' => '2ª&nbsp;Edit. Monte riego', 'date' => '2012-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/capiteles-para-la-historia-banezana-6/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-6-ed2.pdf'),
+    array('title' => 'Luz en la Memoria', 'edition' => '1ª&nbsp;Edit. Monte riego', 'date' => '2011-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Corazón de Cielo', 'edition' => '2ª&nbsp;Edit. Monte riego', 'date' => '2011-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/corazon-de-cielo/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2020/07/3-corazon-de-cielo-2ed.pdf'),
+    array('title' => 'Revista Charin 3 ', 'edition' => '1ª&nbsp;Edit. Monte riego', 'date' => '2011-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/revista-charin-3/', 'pdf' => 'https://alt.fundacionconradoblanco.com/publicaciones/pdf/Revista-Charin-3.pdf'),
+    array('title' => 'Conradosías', 'edition' => '2ª&nbsp;Edit. Monte riego', 'date' => '2011-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Capiteles para la Historia Bañezana V', 'edition' => '2ª&nbsp;Edit. Monte riego', 'date' => '2011-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/capiteles-para-la-historia-banezana-5', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-5-ed2.pdf'),
+    array('title' => 'Corazón de Cielo', 'edition' => '1ª&nbsp;Edit. Monte riego', 'date' => '2011-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/corazon-de-cielo/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2020/07/3-corazon-de-cielo-2ed.pdf'),
+    array('title' => 'Segismundo de Santibáñez', 'edition' => '1ª&nbsp;Edit. Monte riego', 'date' => '2011-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Evocación del Canto Coral', 'edition' => '1ª&nbsp;Edit. Monte riego', 'date' => '2010-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Capiteles para la Historia Bañezana IV', 'edition' => '3ª&nbsp;Edit. Monte riego', 'date' => '2010-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/capiteles-para-la-historia-banezana-4/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-4-ed3.pdf'),
+    array('title' => 'Capiteles para la Historia Bañezana II', 'edition' => '4ª&nbsp;Edit. Monte riego', 'date' => '2010-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/capiteles-para-la-historia-banezana-2', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-2-ed4.pdf'),
+    array('title' => 'Corazón de Ángel', 'edition' => '2ª&nbsp;Castilla ediciones', 'date' => '2010-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Melindres Poéticos y Literarios', 'edition' => '4ª&nbsp;Edit. Monte riego', 'date' => '2010-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Revista Charin 2 ', 'edition' => '1ª&nbsp;Edit. Monte riego', 'date' => '2010-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/revista-charin-2/', 'pdf' => 'https://alt.fundacionconradoblanco.com/publicaciones/pdf/Revista-Charin-2.pdf'),
+    array('title' => 'Antología Corazón de Ángel', 'edition' => '1ª&nbsp;Edit. Monte riego', 'date' => '2010-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Capiteles para la Historia Bañezana III', 'edition' => '2ª&nbsp;Edit. Monte riego', 'date' => '2010-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/?post_type=3d-flip-book&amp;p=1214&amp;preview=true', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-3-ed2.pdf'),
+    array('title' => 'Capiteles para la Historia Bañezana IX', 'edition' => '2ª&nbsp;Edit. Monte riego', 'date' => '2010-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/capiteles-para-la-historia-banezana-9/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-9.pdf'),
+    array('title' => 'Antología Corazón de Luna', 'edition' => '2ª&nbsp;Castilla ediciones', 'date' => '2009-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Capiteles para la Historia Bañezana IX', 'edition' => '1ª&nbsp;Edit. Monte riego', 'date' => '2009-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/capiteles-para-la-historia-banezana-9/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-9.pdf'),
+    array('title' => 'Capiteles para la Historia Bañezana VIII', 'edition' => '2ª&nbsp;Edit. Monte riego', 'date' => '2009-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/capiteles-para-la-historia-banezana-8', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-8-ed2.pdf'),
+    array('title' => 'Revista Charin 1', 'edition' => '1ª&nbsp;Edit. DuesEduardo Aguirre', 'date' => '2009-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Antología Corazón de Luna', 'edition' => '1ª&nbsp;Castilla ediciones', 'date' => '2009-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Capiteles para la Historia Bañezana II', 'edition' => '3ª&nbsp;Edit. Monte riego', 'date' => '2008-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/capiteles-para-la-historia-banezana-2', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-2-ed4.pdf'),
+    array('title' => 'El Recuerdo', 'edition' => '1ª&nbsp;Edit. Monte riego', 'date' => '2008-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Melindres Poéticos y Literarios', 'edition' => '3ª&nbsp;Edit. Monte riego', 'date' => '2008-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Capiteles para la Historia Bañezana IV', 'edition' => '2ª&nbsp;Edit. Monte riego', 'date' => '2008-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/capiteles-para-la-historia-banezana-4/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-4-ed3.pdf'),
+    array('title' => 'Capiteles para la Historia Bañezana I', 'edition' => '2ª&nbsp;Edit. Monte riego', 'date' => '2008-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/capiteles-para-la-historia-banezana-1/', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-1-ed5.pdf'),
+    array('title' => 'Capiteles para la Historia Bañezana II', 'edition' => '2ª&nbsp;Edit. Monte riego', 'date' => '2008-01-01 12:00:00', 'ebook' => 'https://fundacionconradoblanco.com/3d-flip-book/capiteles-para-la-historia-banezana-2', 'pdf' => 'https://fundacionconradoblanco.com/wp-content/uploads/2025/02/capiteles-2-ed4.pdf'),
+    array('title' => 'Conradosías', 'edition' => '&#8211;', 'date' => '2007-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+    array('title' => 'Melindres Poéticos y Literarios', 'edition' => '1ª&nbsp;&#8211;', 'date' => '1999-01-01 12:00:00', 'ebook' => '', 'pdf' => ''),
+);;
+
+	$existing = get_posts( array(
+		"post_type"      => "libro",
+		"posts_per_page" => -1,
+		"post_status"    => "any",
+	) );
+
+	$seen_norm_titles = array();
+	foreach ( $existing as $eb ) {
+		$norm = fcb_normalize_title( $eb->post_title );
+		if ( ! isset( $seen_norm_titles[ $norm ] ) ) {
+			$seen_norm_titles[ $norm ] = $eb->ID;
+		} else {
+			wp_trash_post( $eb->ID );
+		}
+	}
+
+	foreach ( $publicaciones_data as $row ) {
+		$title = $row["title"];
+		$norm  = fcb_normalize_title( $title );
+		$date  = $row["date"];
+		$ed    = $row["edition"];
+		$eb    = $row["ebook"];
+		$pdf   = $row["pdf"];
+
+		if ( isset( $seen_norm_titles[ $norm ] ) ) {
+			$pid = $seen_norm_titles[ $norm ];
+			wp_update_post( array(
+				"ID"            => $pid,
+				"post_date"     => $date,
+				"post_date_gmt" => get_gmt_from_date( $date ),
+			) );
+			if ( ! empty( $ed ) ) {
+				update_post_meta( $pid, "_fcb_libro_edition", $ed );
+			}
+			update_post_meta( $pid, "_fcb_libro_date", substr( $date, 0, 10 ) );
+			if ( ! empty( $eb ) ) {
+				update_post_meta( $pid, "_fcb_libro_ebook", $eb );
+			}
+			if ( ! empty( $pdf ) ) {
+				$curr_pdf = get_post_meta( $pid, "_fcb_libro_pdf", true );
+				if ( empty( $curr_pdf ) ) {
+					update_post_meta( $pid, "_fcb_libro_pdf", $pdf );
+				}
+			}
+		} else {
+			$pid = wp_insert_post( array(
+				"post_title"     => $title,
+				"post_status"    => "publish",
+				"post_type"      => "libro",
+				"post_date"     => $date,
+				"post_date_gmt" => get_gmt_from_date( $date ),
+			) );
+			if ( ! is_wp_error( $pid ) ) {
+				$seen_norm_titles[ $norm ] = $pid;
+				if ( ! empty( $ed ) ) {
+					update_post_meta( $pid, "_fcb_libro_edition", $ed );
+				}
+				update_post_meta( $pid, "_fcb_libro_date", substr( $date, 0, 10 ) );
+				if ( ! empty( $eb ) ) {
+					update_post_meta( $pid, "_fcb_libro_ebook", $eb );
+				}
+				if ( ! empty( $pdf ) ) {
+					update_post_meta( $pid, "_fcb_libro_pdf", $pdf );
+				}
+			}
+		}
+	}
+
+	update_option( $version_key, time() );
+}
+add_action( "init", "fcb_auto_sync_and_deduplicate_libros" );
