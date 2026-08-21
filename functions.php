@@ -597,7 +597,20 @@ function fcb_libro_meta_box_callback( $post ) {
 	$pdf_url   = get_post_meta( $post->ID, '_fcb_libro_pdf', true );
 	$ebook_url = get_post_meta( $post->ID, '_fcb_libro_ebook', true );
 	$edition   = get_post_meta( $post->ID, '_fcb_libro_edition', true );
+	$book_date = get_post_meta( $post->ID, '_fcb_libro_date', true );
+	if ( empty( $book_date ) ) {
+		$book_date = get_the_date( 'Y-m-d', $post->ID );
+	}
 	?>
+	<p>
+		<label for="fcb_libro_date"><strong>Fecha de Publicación del Libro (para ordenar de más nuevo a más antiguo):</strong></label><br />
+		<input type="date" id="fcb_libro_date" name="fcb_libro_date" value="<?php echo esc_attr( $book_date ); ?>" class="widefat" />
+		<span class="description" style="font-size:11px;">Indica el año o fecha de publicación real del libro. Los listados de la web se ordenarán por esta fecha.</span>
+	</p>
+	<p>
+		<label for="fcb_libro_edition"><strong>Edición / Año / Categoría (Texto mostrado):</strong></label><br />
+		<input type="text" id="fcb_libro_edition" name="fcb_libro_edition" value="<?php echo esc_attr( $edition ); ?>" class="widefat" placeholder="Ej: 2025 o 16ª Edición (2025)" />
+	</p>
 	<p>
 		<label for="fcb_libro_pdf"><strong>URL del PDF (Descargar):</strong></label><br />
 		<input type="url" id="fcb_libro_pdf" name="fcb_libro_pdf" value="<?php echo esc_url( $pdf_url ); ?>" class="widefat" placeholder="https://..." />
@@ -605,10 +618,6 @@ function fcb_libro_meta_box_callback( $post ) {
 	<p>
 		<label for="fcb_libro_ebook"><strong>URL del eBook (Visualizar 3D / Enlace):</strong></label><br />
 		<input type="url" id="fcb_libro_ebook" name="fcb_libro_ebook" value="<?php echo esc_url( $ebook_url ); ?>" class="widefat" placeholder="https://..." />
-	</p>
-	<p>
-		<label for="fcb_libro_edition"><strong>Edición / Año / Categoría:</strong></label><br />
-		<input type="text" id="fcb_libro_edition" name="fcb_libro_edition" value="<?php echo esc_attr( $edition ); ?>" class="widefat" placeholder="Ej: 16ª Edición (2025)" />
 	</p>
 	<?php
 }
@@ -633,7 +642,21 @@ function fcb_save_libro_meta( $post_id ) {
 		update_post_meta( $post_id, '_fcb_libro_ebook', esc_url_raw( $_POST['fcb_libro_ebook'] ) );
 	}
 	if ( isset( $_POST['fcb_libro_edition'] ) ) {
-		update_post_meta( $post_id, '_fcb_libro_edition', sanitize_text_field( $_POST['fcb_libro_edition'] ) );
+		$ed_val = sanitize_text_field( $_POST['fcb_libro_edition'] );
+		update_post_meta( $post_id, '_fcb_libro_edition', $ed_val );
+	}
+	if ( ! empty( $_POST['fcb_libro_date'] ) ) {
+		$clean_date = sanitize_text_field( $_POST['fcb_libro_date'] );
+		update_post_meta( $post_id, '_fcb_libro_date', $clean_date );
+
+		// Sincronizar post_date para que las consultas estándar de WP también ordenen fielmente
+		remove_action( 'save_post', 'fcb_save_libro_meta' );
+		wp_update_post( array(
+			'ID'            => $post_id,
+			'post_date'     => date( 'Y-m-d H:i:s', strtotime( $clean_date . ' 12:00:00' ) ),
+			'post_date_gmt' => get_gmt_from_date( date( 'Y-m-d H:i:s', strtotime( $clean_date . ' 12:00:00' ) ) ),
+		) );
+		add_action( 'save_post', 'fcb_save_libro_meta' );
 	}
 }
 add_action( 'save_post', 'fcb_save_libro_meta' );
@@ -1644,6 +1667,22 @@ function fcb_import_books_from_json_ajax() {
 	$imported = 0;
 	$errors   = array();
 
+	// Cargar libros existentes para actualizar y evitar duplicados
+	$existing_books = get_posts( array(
+		'post_type'      => 'libro',
+		'posts_per_page' => -1,
+		'post_status'    => 'any',
+	) );
+	$existing_map = array();
+	foreach ( $existing_books as $eb ) {
+		$norm = fcb_normalize_title( $eb->post_title );
+		$existing_map[ $norm ] = $eb->ID;
+		$eb_url = get_post_meta( $eb->ID, '_fcb_libro_ebook', true );
+		if ( ! empty( $eb_url ) ) {
+			$existing_map[ trim( strtolower( $eb_url ), '/' ) ] = $eb->ID;
+		}
+	}
+
 	foreach ( $books as $index => $book ) {
 		$title = isset( $book['title'] ) ? sanitize_text_field( $book['title'] ) : '';
 		if ( empty( $title ) ) {
@@ -1651,81 +1690,106 @@ function fcb_import_books_from_json_ajax() {
 			continue;
 		}
 
-		$post_id = wp_insert_post( array(
-			'post_title'  => $title,
-			'post_status' => 'publish',
-			'post_type'   => 'libro',
-		) );
+		$norm_title = fcb_normalize_title( $title );
+		$ebook_url  = isset( $book['ebook'] ) ? esc_url_raw( $book['ebook'] ) : '';
+		$ebook_key  = ! empty( $ebook_url ) ? trim( strtolower( $ebook_url ), '/' ) : '';
 
-		if ( is_wp_error( $post_id ) ) {
-			$errors[] = sprintf( __( 'Error al insertar libro "%s": %s', 'fcb' ), $title, $post_id->get_error_message() );
-			continue;
+		$post_id = 0;
+		if ( isset( $existing_map[ $norm_title ] ) ) {
+			$post_id = $existing_map[ $norm_title ];
+		} elseif ( ! empty( $ebook_key ) && isset( $existing_map[ $ebook_key ] ) ) {
+			$post_id = $existing_map[ $ebook_key ];
+		}
+
+		if ( $post_id > 0 ) {
+			// Actualizar post existente
+			wp_update_post( array(
+				'ID'         => $post_id,
+				'post_title' => $title,
+			) );
+		} else {
+			// Crear nuevo post
+			$post_id = wp_insert_post( array(
+				'post_title'  => $title,
+				'post_status' => 'publish',
+				'post_type'   => 'libro',
+			) );
+			if ( is_wp_error( $post_id ) ) {
+				$errors[] = sprintf( __( 'Error al insertar libro "%s": %s', 'fcb' ), $title, $post_id->get_error_message() );
+				continue;
+			}
+			$existing_map[ $norm_title ] = $post_id;
+			if ( ! empty( $ebook_key ) ) {
+				$existing_map[ $ebook_key ] = $post_id;
+			}
 		}
 
 		// Asignar PDF
 		$pdf_url = isset( $book['pdf'] ) ? esc_url_raw( $book['pdf'] ) : '';
 		$local_pdf_path = '';
 		if ( ! empty( $pdf_url ) ) {
-			// Descargar localmente
-			$temp_file = download_url( $pdf_url );
-			if ( ! is_wp_error( $temp_file ) ) {
-				$file_array = array(
-					'name'     => basename( $pdf_url ),
-					'tmp_name' => $temp_file,
-				);
-				$attachment_id = media_handle_sideload( $file_array, $post_id );
-				if ( ! is_wp_error( $attachment_id ) ) {
-					$local_pdf = wp_get_attachment_url( $attachment_id );
-					update_post_meta( $post_id, '_fcb_libro_pdf', $local_pdf );
-					$local_pdf_path = get_attached_file( $attachment_id );
-				} else {
-					@unlink( $temp_file );
-					update_post_meta( $post_id, '_fcb_libro_pdf', $pdf_url );
-				}
-			} else {
+			$curr_pdf = get_post_meta( $post_id, '_fcb_libro_pdf', true );
+			if ( empty( $curr_pdf ) || $curr_pdf !== $pdf_url ) {
 				update_post_meta( $post_id, '_fcb_libro_pdf', $pdf_url );
 			}
 		}
 
 		// Asignar eBook / Flipbook
-		$ebook_url = isset( $book['ebook'] ) ? esc_url_raw( $book['ebook'] ) : '';
 		if ( ! empty( $ebook_url ) ) {
 			update_post_meta( $post_id, '_fcb_libro_ebook', $ebook_url );
 		}
 
-		// Asignar Portada (Cover)
-		$cover_assigned = false;
-		if ( ! empty( $local_pdf_path ) ) {
-			$pdf_cover_id = fcb_generate_cover_from_pdf( $local_pdf_path, $post_id );
-			if ( ! is_wp_error( $pdf_cover_id ) ) {
-				set_post_thumbnail( $post_id, $pdf_cover_id );
-				$local_cover = wp_get_attachment_url( $pdf_cover_id );
-				update_post_meta( $post_id, '_fcb_libro_cover_url', $local_cover );
-				$cover_assigned = true;
-			} else {
-				$errors[] = sprintf( __( 'No se pudo generar portada desde PDF para "%s": %s', 'fcb' ), $title, $pdf_cover_id->get_error_message() );
-			}
-		}
-
-		// Intentar descargar portada desde JSON si no se pudo generar desde el PDF
-		if ( ! $cover_assigned ) {
-			$cover_url = isset( $book['cover'] ) ? esc_url_raw( $book['cover'] ) : '';
-			if ( ! empty( $cover_url ) ) {
-				$desc_img_id = media_sideload_image( $cover_url, $post_id, null, 'id' );
-				if ( ! is_wp_error( $desc_img_id ) ) {
-					set_post_thumbnail( $post_id, $desc_img_id );
-					$local_cover = wp_get_attachment_url( $desc_img_id );
+		// Asignar Portada (Cover) solo si el libro no tiene una asignada
+		if ( ! has_post_thumbnail( $post_id ) ) {
+			$cover_assigned = false;
+			if ( ! empty( $local_pdf_path ) ) {
+				$pdf_cover_id = fcb_generate_cover_from_pdf( $local_pdf_path, $post_id );
+				if ( ! is_wp_error( $pdf_cover_id ) ) {
+					set_post_thumbnail( $post_id, $pdf_cover_id );
+					$local_cover = wp_get_attachment_url( $pdf_cover_id );
 					update_post_meta( $post_id, '_fcb_libro_cover_url', $local_cover );
+					$cover_assigned = true;
 				} else {
-					update_post_meta( $post_id, '_fcb_libro_cover_url', $cover_url );
+					$errors[] = sprintf( __( 'No se pudo generar portada desde PDF para "%s": %s', 'fcb' ), $title, $pdf_cover_id->get_error_message() );
+				}
+			}
+
+			// Intentar descargar portada desde JSON si no se pudo generar desde el PDF
+			if ( ! $cover_assigned ) {
+				$cover_url = isset( $book['cover'] ) ? esc_url_raw( $book['cover'] ) : '';
+				if ( ! empty( $cover_url ) ) {
+					$desc_img_id = media_sideload_image( $cover_url, $post_id, null, 'id' );
+					if ( ! is_wp_error( $desc_img_id ) ) {
+						set_post_thumbnail( $post_id, $desc_img_id );
+						$local_cover = wp_get_attachment_url( $desc_img_id );
+						update_post_meta( $post_id, '_fcb_libro_cover_url', $local_cover );
+					} else {
+						update_post_meta( $post_id, '_fcb_libro_cover_url', $cover_url );
+					}
 				}
 			}
 		}
 
-		// Asignar Edición
+		// Asignar Edición y Fecha de Publicación
 		$edition = isset( $book['edition'] ) ? sanitize_text_field( $book['edition'] ) : '';
 		if ( ! empty( $edition ) ) {
 			update_post_meta( $post_id, '_fcb_libro_edition', $edition );
+			if ( preg_match( '/\b(19\d{2}|20\d{2})\b/', $edition, $ym ) ) {
+				update_post_meta( $post_id, '_fcb_libro_date', $ym[1] . '-01-01' );
+				wp_update_post( array(
+					'ID'            => $post_id,
+					'post_date'     => $ym[1] . '-01-01 12:00:00',
+					'post_date_gmt' => get_gmt_from_date( $ym[1] . '-01-01 12:00:00' ),
+				) );
+			}
+		} elseif ( preg_match( '/\b(19\d{2}|20\d{2})\b/', $title, $ym ) ) {
+			update_post_meta( $post_id, '_fcb_libro_edition', $ym[1] );
+			update_post_meta( $post_id, '_fcb_libro_date', $ym[1] . '-01-01' );
+			wp_update_post( array(
+				'ID'            => $post_id,
+				'post_date'     => $ym[1] . '-01-01 12:00:00',
+				'post_date_gmt' => get_gmt_from_date( $ym[1] . '-01-01 12:00:00' ),
+			) );
 		}
 
 		// Asignar Categoría
@@ -2040,6 +2104,8 @@ function fcb_delete_duplicate_pdf_books_ajax() {
 		'requested' => count( $ids ),
 	) );
 }
+add_action( 'wp_ajax_fcb_delete_duplicate_pdf_books', 'fcb_delete_duplicate_pdf_books_ajax' );
+
 /**
  * AJAX Handler: Sincronizar e importar masivamente libros desde 3D FlipBook
  */
@@ -2143,6 +2209,23 @@ function fcb_sync_from_3d_flipbooks_ajax() {
 		// Guardar URL de PDF
 		if ( ! empty( $pdf_url ) ) {
 			update_post_meta( $post_id, '_fcb_libro_pdf', $pdf_url );
+		}
+
+		// Detectar edición y año a partir del título o URL del PDF
+		$detected_year = '';
+		if ( preg_match( '/\b(19\d{2}|20\d{2})\b/', $title . ' ' . $pdf_url, $year_match ) ) {
+			$detected_year = $year_match[1];
+		}
+		if ( ! empty( $detected_year ) ) {
+			update_post_meta( $post_id, '_fcb_libro_edition', $detected_year );
+			update_post_meta( $post_id, '_fcb_libro_date', $detected_year . '-01-01' );
+			wp_update_post( array(
+				'ID'            => $post_id,
+				'post_date'     => $detected_year . '-01-01 12:00:00',
+				'post_date_gmt' => get_gmt_from_date( $detected_year . '-01-01 12:00:00' ),
+			) );
+		} else {
+			update_post_meta( $post_id, '_fcb_libro_date', substr( $fb->post_date, 0, 10 ) );
 		}
 
 		// Obtener portada generada por flipbook o thumbnail
