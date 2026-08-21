@@ -1075,9 +1075,9 @@ function fcb_render_admin_management_page() {
 			<!-- Caja 3: Mantenimiento de Portadas -->
 			<div class="card" style="max-width: 100%; margin: 0; padding: 20px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.05);">
 				<h2 style="margin-top: 0;"><span class="dashicons dashicons-hammer" style="vertical-align: middle; margin-right: 5px;"></span> <?php esc_html_e( 'Portadas desde PDF', 'fcb' ); ?></h2>
-				<p><?php esc_html_e( 'Regenera las portadas de todos los libros existentes extrayendo la primera página de sus archivos PDF.', 'fcb' ); ?></p>
+				<p><?php esc_html_e( 'Genera las portadas de los nuevos libros que aún no tienen imagen de portada, extrayendo la primera página de sus archivos PDF.', 'fcb' ); ?></p>
 				<p style="margin-top: 20px;">
-					<button type="button" id="fcb-regen-covers-btn" class="button button-primary"><?php esc_html_e( 'Regenerar todas', 'fcb' ); ?></button>
+					<button type="button" id="fcb-regen-covers-btn" class="button button-primary"><?php esc_html_e( 'Generar para nuevos libros', 'fcb' ); ?></button>
 				</p>
 				<div id="fcb-regen-status" style="margin-top: 10px; font-weight: bold; font-size: 11px; line-height: 1.4;"></div>
 			</div>
@@ -1933,7 +1933,7 @@ function fcb_is_exec_enabled() {
 }
 
 /**
- * AJAX Handler para obtener la lista de IDs de libros a procesar.
+ * AJAX Handler para obtener la lista de IDs de libros sin portada (nuevos).
  */
 function fcb_get_book_ids_for_regen_ajax() {
 	check_ajax_referer( 'fcb_regen_covers_nonce', 'nonce' );
@@ -1942,13 +1942,24 @@ function fcb_get_book_ids_for_regen_ajax() {
 		wp_send_json_error( __( 'Permisos insuficientes.', 'fcb' ) );
 	}
 
-	$books = get_posts( array(
+	$all_books = get_posts( array(
 		'post_type'      => 'libro',
 		'posts_per_page' => -1,
+		'post_status'    => 'publish',
 		'fields'         => 'ids',
 	) );
 
-	wp_send_json_success( $books );
+	$books_without_cover = array();
+	foreach ( $all_books as $bid ) {
+		if ( ! has_post_thumbnail( $bid ) ) {
+			$cover_url = get_post_meta( $bid, '_fcb_libro_cover_url', true );
+			if ( empty( $cover_url ) ) {
+				$books_without_cover[] = $bid;
+			}
+		}
+	}
+
+	wp_send_json_success( $books_without_cover );
 }
 add_action( 'wp_ajax_fcb_get_book_ids_for_regen', 'fcb_get_book_ids_for_regen_ajax' );
 
@@ -2437,5 +2448,12 @@ function fcb_create_actividades_page_ajax() {
 }
 add_action( 'wp_ajax_fcb_create_actividades_page', 'fcb_create_actividades_page_ajax' );
 
-
-
+/**
+ * Asegurar que cualquier consulta de libros ordene de forma fiable por fecha/edición.
+ */
+function fcb_order_libros_by_edition( $query ) {
+	if ( ! is_admin() && $query->is_main_query() && ( is_post_type_archive( 'libro' ) || is_tax( 'categoria-libro' ) ) ) {
+		$query->set( 'orderby', array( 'date' => 'DESC', 'ID' => 'DESC' ) );
+	}
+}
+add_action( 'pre_get_posts', 'fcb_order_libros_by_edition' );
